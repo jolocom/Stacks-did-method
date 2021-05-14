@@ -13,7 +13,10 @@ export const registerName = (
 ) => {
   const network = new StacksTestnet()
 
-  getNamePrice({fullyQualifiedName: encodeFQN(name, namespace), network}).then(p => console.log(p.toString()))
+  getNamePrice({
+    fullyQualifiedName: encodeFQN(name, namespace),
+    network,
+  }).then((p) => console.log(p.toString()))
   return encaseP(checkNameAvailable)({ name, namespace, network })
     .pipe(
       chain(() =>

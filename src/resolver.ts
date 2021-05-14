@@ -18,7 +18,7 @@ import {
   fetchNameInfo,
   fetchNamesForAddress,
   fetchZoneFile,
-  fetchTransaction,
+  fetchTransactionById,
   fetchSignedToken,
 } from "./api"
 import { chain, map, promise, FutureInstance } from "fluture"
@@ -91,8 +91,29 @@ const extractContractCallArgs = (functionArgs: Array<any>) => {
   }
 }
 
+const findNestedZoneFileByOwner = (zonefile: string, owner: string) => {
+  const parsedZoneFile = parseZoneFile(zonefile)
+
+  if (parsedZoneFile.txt) {
+    const match = parsedZoneFile.txt.find(
+      ({ txt }) => parseZoneFileTXT(txt).owner === c32ToB58(owner)
+    )
+
+    if (match) {
+      return {
+        zonefile: Buffer.from(
+          parseZoneFileTXT(match.txt).zonefile,
+          "base64"
+        ).toString("ascii"),
+        subdomain: match.name,
+      }
+    }
+  }
+  return {}
+}
+
 // TODO Note - Currently exported for testing.
-export const fetchPublicKeyFromZoneFile = ({
+export const resolvePublicKeyUsingZoneFile = ({
   zonefile,
   name,
   namespace,
@@ -114,33 +135,57 @@ export const fetchPublicKeyFromZoneFile = ({
   } = decodeFQN(parsedZoneFile["$origin"])
 
   if (name && namespace) {
-    // We have the zonefile for our name, or for the tld
     if (name === originName && namespace === originNamespace) {
-      if (originSubdomain && originSubdomain !== subdomain) {
+      if (originSubdomain && subdomain && originSubdomain !== subdomain) {
         throw new Error("Incorrect zonefile")
+      }
+
+      if (originSubdomain === subdomain) {
+        return fetchSignedToken(getTokenFileUrl(parsedZoneFile))
+          .pipe(
+            map((token) =>
+              verifyProfileToken(token[0].token, c32ToB58(address))
+            )
+          )
+          .pipe(
+            map(
+              (res) =>
+                ({
+                  name,
+                  namespace,
+                  subdomain: originSubdomain,
+                  ownerAddress: address,
+                  publicKeyHex: res.payload["subject"].publicKey,
+                } as NameRecord)
+            )
+          )
+      } else if (!subdomain && originSubdomain) {
+        const { zonefile: nestedZoneFile, subdomain: registeredSubdomain } =
+          findNestedZoneFileByOwner(zonefile, address)
+
+        return resolvePublicKeyUsingZoneFile({
+          zonefile: nestedZoneFile,
+          name: name,
+          namespace: namespace,
+          subdomain: registeredSubdomain,
+          address,
+        })
       }
     }
   }
 
-  if (address && parsedZoneFile.txt) {
-    const match = parsedZoneFile.txt.find(
-      ({ txt }) => parseZoneFileTXT(txt).owner === c32ToB58(address)
-    )
+  // We can attempt to find by owner only. This will parse the included TXT records
+  if ((!name || !namespace) && address && parsedZoneFile.txt) {
+    const { zonefile: nestedZoneFile, subdomain: registeredSubdomain } =
+      findNestedZoneFileByOwner(zonefile, address)
 
-    if (match) {
-      const nestedZoneFile = Buffer.from(
-        parseZoneFileTXT(match.txt).zonefile,
-        "base64"
-      ).toString("ascii")
-
-      return fetchPublicKeyFromZoneFile({
-        zonefile: nestedZoneFile,
-        name: originName,
-        namespace: originNamespace,
-        subdomain: match.name,
-        address,
-      })
-    }
+    return resolvePublicKeyUsingZoneFile({
+      zonefile: nestedZoneFile,
+      name: name || originName,
+      namespace: namespace || originNamespace,
+      subdomain: subdomain || registeredSubdomain,
+      address,
+    })
   }
 
   return fetchSignedToken(getTokenFileUrl(parsedZoneFile))
@@ -194,7 +239,7 @@ const getNameInfoForAddress = (address: string) => {
           )
         }
 
-        return fetchPublicKeyFromZoneFile({
+        return resolvePublicKeyUsingZoneFile({
           zonefile: nameInfo.zonefile,
           name: nameInfo.name,
           namespace: nameInfo.namespace,
@@ -212,8 +257,10 @@ export const resolve = async (did: string) => {
   }
 
   const resolvePublicKey = isMigratedDid(did)
-    ? getNameInfoForAddress(address)
-    : fetchTransaction(txId)
+    ? getNameInfoForAddress(address).pipe(
+        map(({ publicKeyHex }) => ({ publicKeyHex }))
+      )
+    : fetchTransactionById(txId)
         .pipe(map(parseAndValidateTransaction))
         .pipe(map(extractContractCallArgs))
         .pipe(
@@ -224,7 +271,7 @@ export const resolve = async (did: string) => {
             )
           })
         )
-        .pipe(chain(fetchPublicKeyFromZoneFile))
+        .pipe(chain(resolvePublicKeyUsingZoneFile))
         .pipe(
           chain((data) => {
             return fetchNameInfo(data.name, data.namespace)
@@ -260,7 +307,7 @@ export const isDidStillActive = (
     )
   }
 
-  return fetchPublicKeyFromZoneFile({
+  return resolvePublicKeyUsingZoneFile({
     zonefile: currentZoneFile,
     name: originalRecord.name,
     namespace: originalRecord.namespace,

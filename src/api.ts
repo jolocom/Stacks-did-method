@@ -30,7 +30,7 @@ export const fetchNameInfo = (name: string, namespace: string) => {
   return fetchJSON(endpoint)
 }
 
-export const fetchTransaction = (txId: string) => {
+export const fetchTransactionById = (txId: string) => {
   const endpoint = `https://stacks-node-api.mainnet.stacks.co/extended/v1/tx/${txId}?event_offset=0&event_limit=96`
   return fetchJSON(endpoint)
 }

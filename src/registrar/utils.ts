@@ -16,7 +16,9 @@ export type StacksKeyPair = {
 }
 
 export const getKeyPair = (privateKey?: string | Buffer): StacksKeyPair => {
-  const priv = privateKey ? createStacksPrivateKey(privateKey) : makeRandomPrivKey()
+  const priv = privateKey
+    ? createStacksPrivateKey(privateKey)
+    : makeRandomPrivKey()
   const publicKey = getPublicKey(priv)
   return {
     privateKey: priv,
