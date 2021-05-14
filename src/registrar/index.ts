@@ -1,7 +1,7 @@
-import { canRegisterName, buildPreorderNameTx, getNamespacePrice, getNamePrice } from "@stacks/bns"
-import { encaseP, chain, map, attemptP, attempt } from "fluture"
+import { canRegisterName, buildPreorderNameTx, getNamePrice } from "@stacks/bns"
+import { encaseP, chain, attemptP } from "fluture"
 import { StacksTestnet } from "@stacks/network"
-import { toFqdn } from "../utils"
+import { encodeFQN } from "../utils"
 import { StacksKeyPair } from "./utils"
 import bn = require("bn.js")
 import { TransactionSigner, broadcastTransaction } from "@stacks/transactions"
@@ -13,12 +13,12 @@ export const registerName = (
 ) => {
   const network = new StacksTestnet()
 
-  getNamePrice({fullyQualifiedName: toFqdn(name, namespace), network}).then(p => console.log(p.toString()))
+  getNamePrice({fullyQualifiedName: encodeFQN(name, namespace), network}).then(p => console.log(p.toString()))
   return encaseP(checkNameAvailable)({ name, namespace, network })
     .pipe(
       chain(() =>
         encaseP(buildPreorderNameTx)({
-          fullyQualifiedName: toFqdn(name, namespace),
+          fullyQualifiedName: encodeFQN(name, namespace),
           publicKey: keyPair.publicKey.data.toString("hex"),
           salt: "hello",
           network,
@@ -37,11 +37,11 @@ export const registerName = (
 
 const checkNameAvailable = async ({ name, namespace, network }) => {
   return canRegisterName({
-    fullyQualifiedName: toFqdn(name, namespace),
+    fullyQualifiedName: encodeFQN(name, namespace),
     network,
   }).then((canRegister) => {
     if (!canRegister) {
-      throw new Error(`can't register name ${toFqdn(name, namespace)}`)
+      throw new Error(`can't register name ${encodeFQN(name, namespace)}`)
     }
   })
 }

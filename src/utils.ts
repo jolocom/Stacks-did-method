@@ -1,7 +1,7 @@
 import "isomorphic-fetch"
 import { last, split } from "ramda"
 import { DIDDocument } from "did-resolver"
-import { getKeyPair } from "./registrar/utils"
+import { DID_METHOD_PREFIX } from "./constants"
 const b58 = require("bs58")
 
 export const encodeFQN = (
@@ -75,10 +75,11 @@ export const stripHexPrefixIfPresent = (data: string) => {
   return data
 }
 
-export const getRandomAddress = () => getKeyPair().publicKey
-
 export const hexToAscii = (hex: string) =>
   Buffer.from(stripHexPrefixIfPresent(hex), "hex").toString("ascii")
+
+export const buildStacksV2DID = (address: string, txId: string) =>
+  `${DID_METHOD_PREFIX}${address}-${stripHexPrefixIfPresent(txId)}`
 
 export const buildDidDoc = (did: string, publicKey: string): DIDDocument => {
   return {

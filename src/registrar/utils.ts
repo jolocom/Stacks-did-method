@@ -15,13 +15,6 @@ export type StacksKeyPair = {
   publicKey: StacksPublicKey
 }
 
-export const debug =
-  (prefix: string) =>
-  <T>(arg: T): T => {
-    console.log(prefix && prefix + "-", { arg })
-    return arg
-  }
-
 export const getKeyPair = (privateKey?: string | Buffer): StacksKeyPair => {
   const priv = privateKey ? createStacksPrivateKey(privateKey) : makeRandomPrivKey()
   const publicKey = getPublicKey(priv)
