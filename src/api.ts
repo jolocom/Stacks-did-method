@@ -1,7 +1,7 @@
 import "isomorphic-fetch"
 import { prop } from "ramda"
 import { encaseP, map, FutureInstance } from "fluture"
-import { encodeFQN, } from "./utils"
+import { encodeFQN, } from "./utils/general"
 
 const fetchJSON = <T>(endpoint: string): FutureInstance<Error, T> => {
   return encaseP<Error, T, string>(() =>
@@ -36,7 +36,7 @@ type NameInfo = {
   zonefile_hash: string
 
 }
-export const fetchNameInfo = ({name, namespace}): FutureInstance<{}, NameInfo> => {
+export const fetchNameInfo = ({name, namespace}): FutureInstance<Error, NameInfo> => {
   const endpoint = `https://stacks-node-api.mainnet.stacks.co/v1/names/${encodeFQN(
     name,
     namespace
@@ -50,7 +50,7 @@ export const fetchTransactionById = (txId: string) => {
 }
 
 export const fetchSignedToken = (endpoint: string) => {
-  return fetchJSON<any[]>(endpoint)
+  return fetchJSON<any[]>(endpoint).pipe(map(el => el[0]))
 }
 
 export const fetchAllNames = (page = 0) => {

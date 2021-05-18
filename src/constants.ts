@@ -1,4 +1,4 @@
-export const DID_METHOD_PREFIX = "did:stacks:v2:"
+export const DID_METHOD_PREFIX = "did:stacks:v2"
 
 export const BNS_ADDRESSES = {
   test: "SP000000000000000000002Q6VF78.bns",
