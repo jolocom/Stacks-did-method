@@ -37,6 +37,10 @@ export const parseStacksV2DID = (did: string): Either<Error, StacksV2DID> => {
     )
   }
   const nsi = last(split(":", did))
+  if (!nsi) {
+    return Left(new Error(`Failed to parse DID, missing NSI`))
+  }
+
   const [address, anchorTxId] = split("-", nsi)
 
   if (!address || !anchorTxId) {

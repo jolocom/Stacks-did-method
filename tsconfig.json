@@ -10,12 +10,14 @@
     "strict": true,
     "strictNullChecks": true,
     "sourceMap": true,
+    "skipLibCheck": true,
     "noEmit": true
   },
   "include": [
-    "tests"
+    "tests",
+    "src"
   ],
   "exclude": [
-    "node_modules",
+    "node_modules"
   ]
 }

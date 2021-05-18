@@ -1,5 +1,5 @@
 import { c32ToB58 } from "c32check"
-import { head, identity } from "ramda"
+import { identity } from "ramda"
 import {
   parseAndValidateTransaction,
   extractContractCallArgs,
@@ -34,31 +34,33 @@ import {
   resolve as fResolve,
   FutureInstance,
 } from "fluture"
-import { Left } from "monet"
+import { Left, Either } from "monet"
 
 const getPublicKeyForMigratedDid = ({
   address,
   anchorTxId,
 }: StacksV2DID): FutureInstance<Error, string> =>
   fetchNamesOwnedByAddress(address)
-    .pipe(map(head))
+    .pipe(map((names) => names[0]))
     .pipe(map(decodeFQN))
     .pipe(chain(fetchNameInfo))
     .pipe(
-      map((nameInfo) => {
-        if (nameInfo.last_txid !== "0x")
+      map((nameInfo): Either<Error, string> => {
+        if (nameInfo.last_txid !== "0x") {
           return Left(
             new Error(
               `Verifying name-record for migrated DID failed, expected last_txid to be 0x, got ${anchorTxId}`
             )
           )
+        }
 
-        if (nameInfo.address !== address)
+        if (nameInfo.address !== address) {
           return Left(
             new Error(
               `Verifying name-record failed, expected name owner to match address, got ${address}`
             )
           )
+        }
 
         return parseZoneFileAndExtractTokenUrl(nameInfo.zonefile, address)
       })

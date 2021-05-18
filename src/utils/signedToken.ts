@@ -1,7 +1,8 @@
 import { getTokenFileUrl } from "@stacks/profile"
 import { Right, Left, Either } from "monet"
 import { verifyProfileToken } from "@stacks/profile"
-import { parseZoneFile } from "zone-file"
+const { parseZoneFile } = require("zone-file")
+// import { parseZoneFile } from "zone-file"
 
 export const extractTokenFileUrl = (
   zoneFile: string

@@ -1,14 +1,17 @@
 import { fork, chain, parallel, map } from "fluture"
-import { findValidNames } from "../src/utils/dev"
-import { b58ToC32 } from "c32check"
+import { findValidNames, debug } from "../src/utils/dev"
 import { range, flatten } from "ramda"
 import { buildStacksV2DID } from "../src/utils/did"
 import { resolve } from "../src/"
 import { promise } from "fluture"
 
+import { b58ToC32 } from "c32check"
 import * as chai from "chai"
 import { BNS_CONTRACT_DEPLOY_TXID } from "../src/constants"
-import { parseZoneFileAndExtractTokenUrl } from "../src/utils/zonefile"
+import {
+  parseZoneFileAndExtractTokenUrl,
+  getRecordsForName,
+} from "../src/utils/zonefile"
 
 var chaiAsPromised = require("chai-as-promised")
 

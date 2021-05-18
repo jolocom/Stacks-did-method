@@ -3,11 +3,11 @@ import { extractTokenFileUrl } from "./signedToken"
 import { decodeFQN, encodeFQN } from "./general"
 import "isomorphic-fetch"
 import { Some, None, Maybe, Right, Left, Either } from "monet"
-import { parseZoneFile } from "zone-file"
+const { parseZoneFile } = require("zone-file")
 const b58 = require("bs58")
 
-export const parseZoneFileTXT = (entries: string[]) => {
-  return entries.reduce(
+export const parseZoneFileTXT = (entries: string[]) =>
+  entries.reduce(
     (parsed, current) => {
       const [prop, value] = current.split("=")
 
@@ -19,7 +19,6 @@ export const parseZoneFileTXT = (entries: string[]) => {
     },
     { zonefile: "", owner: "" }
   )
-}
 
 export const getRecordsForName =
   ({
@@ -38,10 +37,6 @@ export const getRecordsForName =
     const origin = decodeFQN(parsedZoneFile["$origin"])
 
     if (origin.name === name && origin.namespace === namespace) {
-      if (origin.subdomain === subdomain) {
-        return Right(zonefile)
-      }
-
       // We are in the wrong zonefile somehow :(
       if (origin.subdomain && origin.subdomain !== subdomain) {
         return Left(
@@ -63,12 +58,18 @@ export const getRecordsForName =
         }
       }
 
-      if (parsedZoneFile.txt) {
+      if (parsedZoneFile.txt && owner) {
         return findNestedZoneFileByOwner(zonefile, owner).toEither()
+      }
+
+      if (origin.subdomain === subdomain) {
+        return Right(zonefile)
       }
 
       return Left(new Error("zonefile not found"))
     }
+
+    return Left(new Error("Zonefile $ORIGIN did not match passed name"))
   }
 
 const findNestedZoneFileByOwner = (
@@ -79,7 +80,8 @@ const findNestedZoneFileByOwner = (
 
   if (parsedZoneFile.txt) {
     const match = parsedZoneFile.txt.find(
-      ({ txt }) => parseZoneFileTXT(txt).owner === c32ToB58(owner)
+      ({ txt }: { txt: string[]; name: string }) =>
+        parseZoneFileTXT(txt).owner === c32ToB58(owner)
     )
 
     if (match) {

@@ -36,7 +36,7 @@ type NameInfo = {
   zonefile_hash: string
 
 }
-export const fetchNameInfo = ({name, namespace}): FutureInstance<Error, NameInfo> => {
+export const fetchNameInfo = ({name, namespace}: {name: string, namespace: string}): FutureInstance<Error, NameInfo> => {
   const endpoint = `https://stacks-node-api.mainnet.stacks.co/v1/names/${encodeFQN(
     name,
     namespace

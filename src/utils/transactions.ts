@@ -1,12 +1,6 @@
 import { compose } from "ramda"
 import { hexToCV, cvToValue } from "@stacks/transactions"
 import { hexToAscii, stripHexPrefixIfPresent } from "./general"
-import { parseStacksV2DID, buildDidDoc, isMigratedOnChainDid } from "./did"
-import {
-  extractTokenFileUrl,
-  parseZoneFileAndExtractTokenUrl,
-  getRecordsForName,
-} from "./zonefile"
 
 import {
   fetchNameInfo,
