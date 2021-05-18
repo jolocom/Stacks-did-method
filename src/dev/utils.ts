@@ -36,7 +36,7 @@ export const findValidNames =
                       : None()
                   )
                 )
-              // .pipe(map((v) => debug("new entry")(v.orNull())))
+                .pipe(map((v) => debug("new entry")(v.orNull())))
             })
           )
         })
@@ -47,6 +47,6 @@ export const findValidNames =
 export const debug =
   (prefix: string) =>
   <T>(arg: T): T => {
-    console.log(prefix && prefix + "-", { arg })
+    console.log(prefix && prefix + "-", arg )
     return arg
   }
