@@ -1,318 +1,151 @@
 import { c32ToB58 } from "c32check"
-import { BNS_CONTRACT_NAME } from "@stacks/bns"
-import { parseZoneFile } from "zone-file"
-import { compose } from "ramda"
-import { getTokenFileUrl, verifyProfileToken } from "@stacks/profile"
-import { hexToCV, cvToValue } from "@stacks/transactions"
+import { identity } from "ramda"
 import {
-  hexToAscii,
-  stripHexPrefixIfPresent,
-  encodeFQN,
-  decodeFQN,
+  parseAndValidateTransaction,
+  extractContractCallArgs,
+} from "./utils/transactions"
+import {
+  verifyTokenAndGetPubKey,
+  extractTokenFileUrl,
+} from "./utils/signedToken"
+import { decodeFQN } from "./utils/general"
+import {
   parseStacksV2DID,
   buildDidDoc,
-  parseZoneFileTXT,
-} from "./utils"
+  isMigratedOnChainDid,
+} from "./utils/did"
+import {
+  parseZoneFileAndExtractTokenUrl,
+  getRecordsForName,
+} from "./utils/zonefile"
+import { StacksV2DID } from "./types"
 
 import {
   fetchNameInfo,
-  fetchNamesForAddress,
-  fetchZoneFile,
+  fetchNamesOwnedByAddress,
+  fetchZoneFileForName,
   fetchTransactionById,
   fetchSignedToken,
 } from "./api"
-import { chain, map, promise, FutureInstance } from "fluture"
-import { BNS_ADDRESSES, BNS_CONTRACT_DEPLOY_TXID } from "./constants"
+import {
+  chain,
+  map,
+  reject,
+  resolve as fResolve,
+  FutureInstance,
+} from "fluture"
+import { Left, Either } from "monet"
 
-// Ensure contract address is correct - DONE
-// ensure tx type is contract call - DONE
-// ensure contract_call.function_sigunature / name matches - DONE
-
-type NameRecord = {
-  name: string
-  namespace: string
-  subdomain?: string
-  ownerAddress: string
-  publicKeyHex: string
-}
-
-const parseAndValidateTransaction = (txData: any) => {
-  const allowedFunctionNames = ["name-register", "name-update"]
-  const contractCallData = txData["contract_call"]
-
-  if (!contractCallData) {
-    throw new Error("resolve failed, no contract_call in fetched tx")
-  }
-
-  if (!Object.values(BNS_ADDRESSES).includes(contractCallData["contract_id"])) {
-    throw new Error(
-      "Must reference TX to the BNS contract address, mainnet or testnet"
-    )
-  }
-
-  const calledFunction = contractCallData["function_name"]
-
-  if (!allowedFunctionNames.includes(calledFunction)) {
-    throw new Error(
-      `call ${calledFunction} not allowed. supported methods are ${allowedFunctionNames.toString()}`
-    )
-  }
-
-  return contractCallData["function_args"]
-}
-
-/**
- * Extracts the namespace, name, and zonefile-hash arguments from a name-register / name-update TX
- * @returns nameInfo - the name, namespace, and zonefile-hash encoded in the TX
- */
-
-const extractContractCallArgs = (functionArgs: Array<any>) => {
-  const relevantArguments = ["name", "namespace", "zonefile-hash"]
-
-  const {
-    name,
-    namespace,
-    "zonefile-hash": zonefileHash,
-  } = functionArgs.reduce((parsed, current) => {
-    if (relevantArguments.includes(current.name)) {
-      return { ...parsed, [current.name]: current.hex }
-    }
-    return parsed
-  }, {})
-
-  const hexEncodedValues = [name, namespace, zonefileHash].map(
-    compose(stripHexPrefixIfPresent, cvToValue, hexToCV)
-  )
-
-  return {
-    name: hexToAscii(hexEncodedValues[0]),
-    namespace: hexToAscii(hexEncodedValues[1]),
-    zonefileHash: hexEncodedValues[2],
-  }
-}
-
-const findNestedZoneFileByOwner = (zonefile: string, owner: string) => {
-  const parsedZoneFile = parseZoneFile(zonefile)
-
-  if (parsedZoneFile.txt) {
-    const match = parsedZoneFile.txt.find(
-      ({ txt }) => parseZoneFileTXT(txt).owner === c32ToB58(owner)
-    )
-
-    if (match) {
-      return {
-        zonefile: Buffer.from(
-          parseZoneFileTXT(match.txt).zonefile,
-          "base64"
-        ).toString("ascii"),
-        subdomain: match.name,
-      }
-    }
-  }
-  return {}
-}
-
-// TODO Note - Currently exported for testing.
-export const resolvePublicKeyUsingZoneFile = ({
-  zonefile,
-  name,
-  namespace,
+const getPublicKeyForMigratedDid = ({
   address,
-  subdomain,
-}: {
-  zonefile: string
-  name?: string
-  namespace?: string
-  subdomain?: string
-  address: string
-}): FutureInstance<{}, NameRecord> => {
-  const parsedZoneFile = parseZoneFile(zonefile)
-
-  const {
-    name: originName,
-    namespace: originNamespace,
-    subdomain: originSubdomain,
-  } = decodeFQN(parsedZoneFile["$origin"])
-
-  if (name && namespace) {
-    if (name === originName && namespace === originNamespace) {
-      if (originSubdomain && subdomain && originSubdomain !== subdomain) {
-        throw new Error("Incorrect zonefile")
-      }
-
-      if (originSubdomain === subdomain) {
-        return fetchSignedToken(getTokenFileUrl(parsedZoneFile))
-          .pipe(
-            map((token) =>
-              verifyProfileToken(token[0].token, c32ToB58(address))
+  anchorTxId,
+}: StacksV2DID): FutureInstance<Error, string> =>
+  fetchNamesOwnedByAddress(address)
+    .pipe(map((names) => names[0]))
+    .pipe(map(decodeFQN))
+    .pipe(chain(fetchNameInfo))
+    .pipe(
+      map((nameInfo): Either<Error, string> => {
+        if (nameInfo.last_txid !== "0x") {
+          return Left(
+            new Error(
+              `Verifying name-record for migrated DID failed, expected last_txid to be 0x, got ${anchorTxId}`
             )
-          )
-          .pipe(
-            map(
-              (res) =>
-                ({
-                  name,
-                  namespace,
-                  subdomain: originSubdomain,
-                  ownerAddress: address,
-                  publicKeyHex: res.payload["subject"].publicKey,
-                } as NameRecord)
-            )
-          )
-      } else if (!subdomain && originSubdomain) {
-        const { zonefile: nestedZoneFile, subdomain: registeredSubdomain } =
-          findNestedZoneFileByOwner(zonefile, address)
-
-        return resolvePublicKeyUsingZoneFile({
-          zonefile: nestedZoneFile,
-          name: name,
-          namespace: namespace,
-          subdomain: registeredSubdomain,
-          address,
-        })
-      }
-    }
-  }
-
-  // We can attempt to find by owner only. This will parse the included TXT records
-  if ((!name || !namespace) && address && parsedZoneFile.txt) {
-    const { zonefile: nestedZoneFile, subdomain: registeredSubdomain } =
-      findNestedZoneFileByOwner(zonefile, address)
-
-    return resolvePublicKeyUsingZoneFile({
-      zonefile: nestedZoneFile,
-      name: name || originName,
-      namespace: namespace || originNamespace,
-      subdomain: subdomain || registeredSubdomain,
-      address,
-    })
-  }
-
-  return fetchSignedToken(getTokenFileUrl(parsedZoneFile))
-    .pipe(map((token) => verifyProfileToken(token[0].token, c32ToB58(address))))
-    .pipe(
-      map(
-        (res) =>
-          ({
-            name,
-            namespace,
-            subdomain: originSubdomain,
-            ownerAddress: address,
-            publicKeyHex: res.payload["subject"].publicKey,
-          } as NameRecord)
-      )
-    )
-}
-
-const isMigratedDid = (did: string) => {
-  const { txId } = parseStacksV2DID(did)
-  return Object.values(BNS_CONTRACT_DEPLOY_TXID).includes(txId)
-}
-
-const getNameInfoForAddress = (address: string) => {
-  return fetchNamesForAddress(address)
-    .pipe(
-      chain((names) => {
-        if (Array.isArray(names) && names.length !== 1) {
-          throw new Error(
-            `Address expected to own exactly one on-chain name, received - ${names.toString()}`
-          )
-        }
-
-        const { name, namespace } = decodeFQN(names[0])
-        return fetchNameInfo(name, namespace).pipe(
-          map((info) => ({ name, namespace, ...info }))
-        )
-      })
-    )
-    .pipe(
-      chain((nameInfo) => {
-        if (nameInfo["last_txid"] !== "0x") {
-          throw new Error(
-            `Verifying name-record for migrated DID failed, expected last_txid to be 0x, got ${nameInfo["last_txid"]}`
           )
         }
 
         if (nameInfo.address !== address) {
-          throw new Error(
-            `Verifying name-record failed, expected name owner to match address, got ${nameInfo.address}`
+          return Left(
+            new Error(
+              `Verifying name-record failed, expected name owner to match address, got ${address}`
+            )
           )
         }
 
-        return resolvePublicKeyUsingZoneFile({
-          zonefile: nameInfo.zonefile,
-          name: nameInfo.name,
-          namespace: nameInfo.namespace,
-          address,
-        })
+        return parseZoneFileAndExtractTokenUrl(nameInfo.zonefile, address)
       })
     )
-}
-
-export const resolve = async (did: string) => {
-  const { address, txId } = parseStacksV2DID(did)
-
-  if (!address || !txId) {
-    throw new Error(`address or txId undefined, ${{ address, txId }}`)
-  }
-
-  const resolvePublicKey = isMigratedDid(did)
-    ? getNameInfoForAddress(address).pipe(
-        map(({ publicKeyHex }) => ({ publicKeyHex }))
+    .pipe(chain((result) => result.fold(reject, fetchSignedToken)))
+    .pipe(map(verifyTokenAndGetPubKey(c32ToB58(address))))
+    .pipe(
+      chain((either) =>
+        either.fold<FutureInstance<Error, string>>(reject, fResolve)
       )
-    : fetchTransactionById(txId)
-        .pipe(map(parseAndValidateTransaction))
-        .pipe(map(extractContractCallArgs))
-        .pipe(
-          // Fetch the zonefile given a name, namespace and zonefile hash
-          chain((args) => {
-            return fetchZoneFile(args).pipe(
-              map((zonefile: string) => ({ ...args, zonefile, address }))
-            )
-          })
-        )
-        .pipe(chain(resolvePublicKeyUsingZoneFile))
-        .pipe(
-          chain((data) => {
-            return fetchNameInfo(data.name, data.namespace)
-              .pipe(chain((info) => isDidStillActive(data, info)))
-              .pipe(
-                map(
-                  (active) =>
-                    active && {
-                      publicKeyHex: data.publicKeyHex,
-                    }
-                )
-              )
-          })
-        )
+    )
 
-  //@ts-ignore
-  return promise(resolvePublicKey).then(({ publicKeyHex }) =>
-    buildDidDoc(did, publicKeyHex)
-  )
-}
+const getPublicKeyForDID = (did: StacksV2DID): FutureInstance<Error, string> =>
+  fetchTransactionById(did.anchorTxId)
+    .pipe(map(parseAndValidateTransaction))
+    .pipe(map((tx) => tx.chain(extractContractCallArgs)))
+    .pipe(
+      chain((result) =>
+        result.fold(reject, (callArgs) =>
+          fetchZoneFileForName(callArgs)
+            .pipe(
+              map(
+                getRecordsForName({
+                  ...callArgs,
+                  owner: did.address,
+                })
+              )
+            )
+            .pipe(
+              chain((zonefile) =>
+                zonefile
+                  .flatMap(extractTokenFileUrl)
+                  .fold(reject, fetchSignedToken)
+              )
+            )
+        )
+      )
+    )
+    .pipe(map(verifyTokenAndGetPubKey(c32ToB58(did.address))))
+    .pipe(
+      chain((either) =>
+        either.fold<FutureInstance<Error, string>>(reject, fResolve)
+      )
+    )
+
+export const resolve = (did: string) =>
+  parseStacksV2DID(did)
+    .map((parsedDID) =>
+      (isMigratedOnChainDid(parsedDID)
+        ? getPublicKeyForMigratedDid(parsedDID)
+        : getPublicKeyForDID(parsedDID)
+      ).pipe(map(buildDidDoc(did)))
+    )
+    .fold(reject, identity)
 
 // Does the address still own the name assigned to it at registration?
-// Find the correct record using $ORIGIN
-export const isDidStillActive = (
-  originalRecord: NameRecord,
-  currentZoneFile: string
-) => {
-  const parsedZoneFile = parseZoneFile(currentZoneFile)
-
-  if (!parsedZoneFile) {
-    throw new Error(
-      `Failed to parse current zonefile, received content - ${currentZoneFile}`
-    )
-  }
-
-  return resolvePublicKeyUsingZoneFile({
-    zonefile: currentZoneFile,
-    name: originalRecord.name,
-    namespace: originalRecord.namespace,
-    address: originalRecord.ownerAddress,
-  }).pipe(
-    map((v: NameRecord) => v.publicKeyHex === originalRecord.publicKeyHex)
-  )
-}
+// Ensures that the key has not been changed as well
+// TODO May have to account for key rotation
+// export const isDidStillActive = (
+//   { name, subdomain, ownerAddress, namespace, publicKeyHex }: NameRecord,
+//   currentZoneFile: string
+// ) => {
+//   const parsedZoneFile = parseZoneFile(currentZoneFile)
+//
+//   if (!parsedZoneFile) {
+//     return Left(
+//       new Error(
+//         `Failed to parse current zonefile, received content - ${currentZoneFile}`
+//       )
+//     )
+//   }
+//
+//   return getRecordsForName(
+//     {
+//       name,
+//       namespace,
+//       subdomain,
+//       owner: ownerAddress,
+//     },
+//     currentZoneFile
+//   )
+//     .map(parseZoneFile)
+//     .map(extractTokenFileUrl)
+//     .cata(reject, fetchSignedToken)
+//     .pipe(chain(fetchSignedToken))
+//     .pipe(chain(curry(flip(verifyProfileToken))(ownerAddress)))
+//     .pipe(map((v) => v["payload"]["subject"].publicKey === publicKeyHex))
+// }

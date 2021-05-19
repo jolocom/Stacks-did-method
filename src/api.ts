@@ -1,28 +1,42 @@
 import "isomorphic-fetch"
 import { prop } from "ramda"
-import { encaseP, chain, map } from "fluture"
-import { encodeFQN } from "./utils"
+import { encaseP, map, FutureInstance } from "fluture"
+import { encodeFQN, } from "./utils/general"
 
-const fetchJSON = (endpoint: string) =>
-  encaseP(fetch)(endpoint).pipe(chain(encaseP((res) => res.json())))
+const fetchJSON = <T>(endpoint: string): FutureInstance<Error, T> => {
+  return encaseP<Error, T, string>(() =>
+    fetch(endpoint)
+      .then(res => res.json() as Promise<T>)
+  )(endpoint)
+}
 
-export const fetchZoneFile = (args: {
+export const fetchZoneFileForName = (args: {
   name: string
   namespace: string
   zonefileHash?: string
 }) => {
   const fullName = encodeFQN(args.name, args.namespace)
   const endpoint = `https://stacks-node-api.mainnet.stacks.co/v1/names/${fullName}/zonefile/${args.zonefileHash}`
-  return fetchJSON(endpoint).pipe(map(prop("zonefile")))
+  return fetchJSON<{zonefile: string}>(endpoint).pipe(map(prop("zonefile")))
 }
 
-export const fetchNamesForAddress = (address: string, chain = "stacks") => {
-  return fetchJSON(
+export const fetchNamesOwnedByAddress = (address: string, chain = "stacks"): FutureInstance<Error, string[]> => {
+  return fetchJSON<{names: string[]}>(
     `https://stacks-node-api.mainnet.stacks.co/v1/addresses/${chain}/${address}`
   ).pipe(map(prop("names")))
 }
 
-export const fetchNameInfo = (name: string, namespace: string) => {
+type NameInfo = {
+  address: string,
+  blockchain: string,
+  expire_block: number,
+  last_txid: string,
+  status: string,
+  zonefile: string
+  zonefile_hash: string
+
+}
+export const fetchNameInfo = ({name, namespace}: {name: string, namespace: string}): FutureInstance<Error, NameInfo> => {
   const endpoint = `https://stacks-node-api.mainnet.stacks.co/v1/names/${encodeFQN(
     name,
     namespace
@@ -32,15 +46,15 @@ export const fetchNameInfo = (name: string, namespace: string) => {
 
 export const fetchTransactionById = (txId: string) => {
   const endpoint = `https://stacks-node-api.mainnet.stacks.co/extended/v1/tx/${txId}?event_offset=0&event_limit=96`
-  return fetchJSON(endpoint)
+  return fetchJSON<string>(endpoint)
 }
 
 export const fetchSignedToken = (endpoint: string) => {
-  return fetchJSON(endpoint)
+  return fetchJSON<any[]>(endpoint).pipe(map(el => el[0]))
 }
 
 export const fetchAllNames = (page = 0) => {
-  return fetchJSON(
+  return fetchJSON<string[]>(
     `https://stacks-node-api.mainnet.stacks.co/v1/names?page=${page}`
   )
 }

@@ -1,5 +1,6 @@
-import { decodeFQN, buildStacksV2DID } from "../utils"
-import { fetchAllNames, fetchNameInfo, fetchZoneFile } from "../api"
+import { buildStacksV2DID } from "./did"
+import { decodeFQN } from "./general"
+import { fetchAllNames, fetchNameInfo, fetchZoneFileForName } from "../api"
 import { None, Some } from "monet"
 import { map, chain, mapRej, resolve } from "fluture"
 import { map as rMap } from "ramda"
@@ -11,13 +12,13 @@ export const findValidNames =
       map(
         rMap((fqn: string) => {
           const { name, namespace } = decodeFQN(fqn)
-          return fetchNameInfo(name, namespace).pipe(
+          return fetchNameInfo({ name, namespace }).pipe(
             chain((info) => {
               if (ignoreMigrated && info["last_txid"] == "0x") {
                 return resolve(None())
               }
 
-              return fetchZoneFile({
+              return fetchZoneFileForName({
                 name,
                 namespace,
                 zonefileHash: info["zonefile_hash"],
@@ -36,7 +37,7 @@ export const findValidNames =
                       : None()
                   )
                 )
-              // .pipe(map((v) => debug("new entry")(v.orNull())))
+                .pipe(map((v) => debug("new entry")(v.orNull())))
             })
           )
         })
@@ -47,6 +48,6 @@ export const findValidNames =
 export const debug =
   (prefix: string) =>
   <T>(arg: T): T => {
-    console.log(prefix && prefix + "-", { arg })
+    console.log(prefix && prefix + "-", arg)
     return arg
   }

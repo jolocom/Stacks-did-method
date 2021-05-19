@@ -1,10 +1,10 @@
-import { canRegisterName, buildPreorderNameTx, getNamePrice } from "@stacks/bns"
+import { canRegisterName, buildPreorderNameTx } from "@stacks/bns"
 import { encaseP, chain, attemptP } from "fluture"
-import { StacksTestnet } from "@stacks/network"
-import { encodeFQN } from "../utils"
+import { StacksTestnet, StacksNetwork } from "@stacks/network"
+import { encodeFQN } from "../utils/general"
 import { StacksKeyPair } from "./utils"
-import bn = require("bn.js")
 import { TransactionSigner, broadcastTransaction } from "@stacks/transactions"
+import bn = require("bn.js")
 
 export const registerName = (
   name: string,
@@ -13,10 +13,6 @@ export const registerName = (
 ) => {
   const network = new StacksTestnet()
 
-  getNamePrice({
-    fullyQualifiedName: encodeFQN(name, namespace),
-    network,
-  }).then((p) => console.log(p.toString()))
   return encaseP(checkNameAvailable)({ name, namespace, network })
     .pipe(
       chain(() =>
@@ -38,7 +34,15 @@ export const registerName = (
     )
 }
 
-const checkNameAvailable = async ({ name, namespace, network }) => {
+const checkNameAvailable = async ({
+  name,
+  namespace,
+  network,
+}: {
+  name: string
+  namespace: string
+  network: StacksNetwork
+}) => {
   return canRegisterName({
     fullyQualifiedName: encodeFQN(name, namespace),
     network,
