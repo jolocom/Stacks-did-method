@@ -209,14 +209,13 @@ Once both steps have been completed, a resolvable Stacks v2 DID can be derived f
 
 A Stacks v2 on-chain DID can be derived this way for any on-chain name (newly registered or already existing). In the current system therefore registering a on-chain BNS name is the only thing required in order to register the corresponding DID.
 
-**TODO Update with TX example and reference(s) to stacks.js/bns.**  
 Details on the wire formats for these transactions can be found in Appendix A.
-Blockstack supplies both a [graphical
-tool](https://github.com/blockstack/blockstack-browser) and a [command-line
+Blockstack supplies both a [graphical tool](https://github.com/blockstack/blockstack-browser) and a [command-line
 tool](https://github.com/blockstackl/cli-blockstack) for generating and
 broadcasting these transactions, as well as a  [reference
-library](https://github.com/blockstack/blockstack.js).
-**END TOOD**
+library](https://github.com/blockstack/stacks.js/tree/master/packages/bns) for
+interacting with the BNS contract for registering / updating
+on-chain names.
 
 #### Off-chain names
 Unlike an on-chain name, a subdomain owner needs an on-chain name owner's help
@@ -229,9 +228,7 @@ To register an off-chain name, the user must submit a request to the
 corresponding off-chain registrar. Anyone with an on-chain name (e.g.
 `res_publica.id`) can operate such a registrar and allow for the registration of
 associated off-chain names / subdomains (e.g. `info.res_publica.id`).  A
-reference registrar implementation can be found reference registrar
-implementation can be found
-[here](https://github.com/blockstack/subdomain-registrar).
+reference registrar implementation can be found [here](https://github.com/blockstack/subdomain-registrar).
 
 To register an off-chain DID, the user must submit a JSON body as a HTTP POST
 request to the registrar's registration endpoint with the following format:
@@ -264,73 +261,111 @@ following properties:
 * The HTTP or HTTPS URL must resolve to a JSON Web token signed by a secp256k1
   public key that hashes to the `owner_address` field, per section 2.1.
 
-Once the registrar accumulates enough requests, it can anchor a new batch of
-subdomain registration / update operations. This is achieved by storing
-subdomain records in the BNS name zone files (e.g. the zonefile associated with
-`res_publica.id`). An on-chain name owner broadcasts subdomain operations by
-encoding them as TXT records within a DNS zone file. To
-broadcast the zone file, the name owner sets the new zone file hash with a
-`name-update` transaction and replicates the zone file. This, in turn, replicates
-all subdomain operations it contains, and anchors the set of subdomain
-operations to an on-chain transaction. The BNS node's consensus rules ensure
-that only valid subdomain operations from valid `name-update` transactions will
-ever be stored.
+Once the registrar accumulates enough requests, a new batch of subdomain
+ operations can be published. An on-chain name owner broadcasts subdomain
+ operations by encoding them as TXT records within a DNS zone file. To broadcast
+ the zone file, the name owner sets the new zone file hash with a `name-update`
+ transaction and replicates the zone file. This, in turn, replicates all
+ subdomain operations it contains, and anchors the set of subdomain operations
+ to an on-chain transaction. The BNS node's consensus rules ensure that only
+ valid subdomain operations from valid `name-register`, `name-update` or
+ `name-import` transactions will ever be stored.
 
 Once the transaction confirms and the off-chain zone files are propagated to the
 peer network, any Blockstack node will be able to resolve the off-chain name's
 associated DID.
 
-Once the off-chain name has been registered, a resolvable Stacks v2 DID can be derived for this name by concatenating the address of the subdomain owner, and the identifier of the `name-update` transaction broadcasted by the respective name owner.
+A resolvable Stacks v2 DID can be derived for this name by concatenating the address of the subdomain owner, and the identifier of the relevant Stacks transaction broadcasted by the respective name owner.
 
 Just like in the case of on-chain DIDs, a Stacks v2 off-chain DID can be derived this way for any off-chain name (newly registered or already existing). In the current system therefore registering a off-chain BNS name is the only thing required in order to register the corresponding DID.
 
 
-## 3.2  Storing a Blockstack DID's DDO
+## 3.2  Generating a DID Document for a Stacks v2 DID
 
 Each name in Blockstack, and by extention, each DID, must have one or more
-associated URLs.  To resolve a DID (section 3.3), the DID's URLs must point to a
-well-formed signed DDO.  It is up to the DID owner to sign and upload the DDO to
-the relevant location(s) so that DID resolution works as expected, and it is up
-to the DID owner to ensure that the DDO is well-formed.  Resolvers should
-validate DDOs before returning them to clients.
+associated URLs (elaborated on in further sections). To resolve a DID (section
+3.3), the URL(s) associated with the BNS name must point to a valid, signed JSON
+Web token. 
 
-In order for a DID to resolve to a DDO, the DDO must be encoded as a JSON web
-token, and must be signed by the secp256k1 private key whose public key hashes
-to the DID's address.  This is used by the DID resolver to authenticate the DDO,
-thereby removing the need to trust the server(s) hosting the DDO with replying
-authentic data.
+It is up to the DID owner to sign and upload the JSON Web token to the relevant
+location(s) so that DID resolution works as expected.  The JSON Web token must
+be signed by the secp256k1 private key whose public key hashes to the `address`
+encoded in the DID.  As part of the resolution process, the BNS name associated
+with the DID being resolved is first identified. Then the URL(s) associated with
+the BNS name are used to retrieve the public key for it's owner.
+
+The resolved public key, alongside the DID being resolved can be used to
+generate a well-formed DID Document and return it to the client.
+
 
 ## 3.3  Resolving a Blockstack DID
 
-Any Blockstack node with an up-to-date view of the underlying blockchain and a
-complete set of off-chain zone files can translate any name into its DID, and
-translate any DID into its name.
+Resolving Stacks DIDs happens with the aid of the aforementioned BNS smart
+contract and the Atlas peer network.  The exact resolution steps differ slightly
+depending on the type of DID being resolved (off-chain or on-chain), but the
+general idea, as well as a number of steps are the same.
 
-Given a blockstacks v2 did, the resolution process would look as follows:
-1. Separate the `address` and `transactionId` parts of the DID's method-specific identifier.
-2. Fetch the transaction referenced by the provided `transactionId`.
-3. Ensure the transaction is valid (i.e. correct method call, correct contract
-   address, etc.)
-4. Extract the arguments included in the contract call parsed in step 3, we
-   expect these to be: `name`, `namespace` and `zonefile-hash`. Of particular
-   interest is the `zonefile-hash` argument. Using this argument we can retrieve
-   a `zonefile` associated with the name record. This `zonefile` will serve as a
-   source of public key material and enable further resolution.
-5. Fetch the `zonefile` referenced by the `zonefile-hash` from step 4.
-6. Retrieve the signed JWT associated with the name / zonefile. Depending on
-   whether we are resolving an on-chain or an off-chain name, the process of
-   finding the appropriate URI record is slightly different.
-7. Extract the public key included in the signed token retrieved at step 6. This
-   key is used to verify the signature on the token. If the signature
-   verification passes, we further need to make sure that the referenced public
-   key hashes to the expected owner's address.
-8. Check if the DID has been deactivated (open question wrgt. key rotation and
-   domain lifecycle management, will be elaborated on shortly).
-9. Retrun a DID document assembled based on the passed DID and public key.
+First, the method-specific identifier is parsed, and the included `address` and
+Stacks transaction identifier (`txId`) are extracted. As mentioned in previous
+sections, the `txId` can be used to fetch the corresponding Stacks transaction
+(e.g. by using the [HTTP
+api](https://stacks-node-api.mainnet.stacks.co/extended/v1/tx/0xdb05bd4e09fb29b6c91087aa9af0edeeb9f9f588a74ac64529bee9659c41871b)),
+which is expected to encode a `name-register`, `name-update` or `name-import`
+function call on the BNS smart contract. The retrieved Stacks transaction can be
+parsed, and the arguments passed to the function call can be extracted. These
+are expected to be the `name`, `namespace`, and `zonefile-hash`.
 
-This resolution process is [implemented as part of the corresponding resolver
-module](./). Feel free to refer to the implementaiton for additional insights
-into the individual validation steps.
+At this stage, we can use the Atlas peer network to retrieve the `zonefile`
+using the extracted `zonefile-hash`. The retrieved `zonefile` is expected to
+contain the `$ORIGIN` directive, matching the `name` and `namespace` values
+extracted in the previous step. The `zonefile` might include multiple TXT
+resource records, encoding further zone files associated with subdomains managed
+by this `name`. Depending on whether the `zonefile` includes records for it's
+subdomains, the resolution process can take one of two steps:
+
+### 3.3.1 Resolving an on-chain DID
+
+In case the `zonefile` contains no TXT resource records with zone files for it's
+subdomains, we can safely assume that we are resolving an on-chain DID.
+
+In this case, the zonefile is expected to include at least one `URI` resource
+record that encodes an HTTP or HTTPS URL. The HTTP or HTTPS URL must resolve to
+a JSON Web token signed by a secp256k1 public key. The presence of this resource
+record is what allows us to obtain the public key associated with the BNS name
+(and by extension DID).
+
+Once we retrieve the signed JSON Web token, we can use the included public key
+to verify the associated signature. If the signature verification succeeds, and
+the public key hash matches the `address` part of the Stacks method-specific
+identifier, we can proceed, otherwise resolution fails with the appropriate
+error.
+
+### 3.3.2 Resolving an off-chain DID
+
+In case the `zonefile` contains one or more TXT resource records, we might be
+resolving an off-chain DID. At this stage, we do not know the subdomain
+associated with the DID (since these are not managed by the BNS contract
+directly).  We only know the `name` and `namespace`. In order to find the
+correct subdomain zone file, we need to parse through the included TXT records.
+Each record encodes a number of properties, among which the `zonefile` for the
+subdomain, and it's current `owner` (as documented
+[here](https://docs.stacks.co/build-apps/references/bns#subdomains)). 
+
+If any of the records list the `address` extracted from the DID's
+method-specific identifer as the owner, the associated zone file can be decoded
+and parsed. Once the zone file for the subdomain has been retrieved, the
+resolution steps match the ones defined in the previous subsection (i.e. find
+the associated `URI` resource record, fetch the signed JSON Web token, etc.).
+
+If none of the TXT resource records list the `address` as the owner, should we
+look for a top level URI RR?
+
+At this stage, regardless of the resolution approach we took, we should have the
+public key associated with the DID. To complete the resolution process, a DID
+Document can be assembled using the DID and retrieved key material.
+
+This resolution process is also [implemented as part of the corresponding
+resolver module](../src/resolver.ts). 
 
 ## 3.4 Updating a Blockstack DID
 
