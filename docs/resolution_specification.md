@@ -1,4 +1,4 @@
-Blockstack V2 DID Method Specification 
+Blockstack V2 DID Method Specification
 
 # Abstract
 
@@ -8,9 +8,9 @@ decentralized [naming
 layer](https://docs.blockstack.org/core/naming/introduction.html), which binds a
 user's human-readable username to their current public key and a pointer to
 their data storage buckets.  The naming layer ensures that names are globally
-unique, that names can be arbitrary human-meaningful strings, and that names
-are owned and controlled by cryptographic key pairs such that only the owner of
-the private key can update the name's associated state.
+unique, that names can be arbitrary human-meaningful strings, and that names are
+owned and controlled by cryptographic key pairs such that only the owner of the
+private key can update the name's associated state.
 
 The naming layer implements DIDs as a mapping between the initial name operation
 for a user's name and the name's current public key.  The storage pointers in
@@ -49,20 +49,23 @@ migrates to a new blockchain in the future.
 
 Understanding how Blockstack DIDs operate requires understanding how Blockstack
 names operate.  Fundamentally, a Blockstack DID is defined as a pointer to a
-*name registered by an address.*  How this information is determined depends
-on the category of name being registered -- a DID can be derived from an
+*name registered by an address.* A Stacks v2 DID can be derived from an
 *on-chain* name or an *off-chain* name.  We call these DIDs *on-chain DIDs* and
 *off-chain DIDs*, respectively.
 
 Both *on-chain* and *off-chain* names can be resolved to their current owner, as
-well as their associated public key(s) using the BNS contract, and the
-Blockstack Atlas network.
+well as their associated public key(s) using the BNS contract and the Blockstack
+Atlas peer network.
 
 ### 1.1.1 On-Chain DIDs
 
-On-chain names are registered on the Stacks blockchain, and can be resolved /
-managed by interacting with the BNS clarity smart contract. Instantiating an
-on-chain name requires two calls to the BNS contract:
+On-chain DIDs are based on [BNS
+names](https://docs.stacks.co/build-apps/references/bns#organization-of-bns)
+whose records are stored directly on the blockchain. The ownership and state of
+these names are controlled by sending blockchain transactions to the BNS smart
+contract.
+
+Instantiating an on-chain name requires two calls to the BNS contract:
 1. First a call to the
    [`name-preorder`](./https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L581)
    function needs to be made. This transaction commits to a salted hashed name
@@ -70,71 +73,89 @@ on-chain name requires two calls to the BNS contract:
 2. Once the name has been preordered, a call to the
    [`name-register`](.https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L609/)
    function can be made to finalize the registration process. This transaction
-   reveals the salt and the registered name to the network. If the operation succeeds, the BNS contract state will be updated 
-   to include a new entry, mapping the newly registered name to it's owner's address (hash of the public key) and a zonefile hash. 
-   
+   reveals the salt and the registered name to the network. If the operation
+   succeeds, the BNS contract state will be updated  to include a new entry,
+   mapping the newly registered name to it's owner's address (hash of the public
+   key) and a zonefile hash.
+
  On-chain names can be resolved by calling the
  [`name-resolve`](https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L928)
  function on the BNS contract. The function will return the name's current owner
  (i.e. address), the hash of the associated zonefile (which can be resolved
- using the Blockstack's Atlas network), as well as metadata related to the registration / expiry times.
+ using the Blockstack's Atlas network), as well as metadata related to the
+ registration / expiry times.
 
-A Stacks V2 DID can be constructed for any on-chain name by concatenating the address of the name owner (e.g. `SP6G7N19FKNW24XH5JQ5P5WR1DN10QWMKMF1WMB3`) with the identifier of the transaction which registered the name (i.e. a `name-register` or `name-import` call to the BNS contract), as described in further sections.
+A resolvable Stacks V2 DID can be derived for any existing on-chain name by
+concatenating two pieces of information:
+
+- The address of the name owner, e.g. `SP6G7N19FKNW24XH5JQ5P5WR1DN10QWMKMF1WMB3`
+- The identifier of the Stacks transaction which registered / updated the
+  on-chain name, e.g.
+  `d27cb8d9cd4a9f21b1582c5c89a0d303aa613261ad41b729b48bf714f9cd1a02`
+
+The resulting did -
+`did:stacks:v2:SP6G7N19FKNW24XH5JQ5P5WR1DN10QWMKMF1WMB3-d27cb8d9cd4a9f21b1582c5c89a0d303aa613261ad41b729b48bf714f9cd1a02`
+contains enough information to retrieve and verify the public keys associated
+with the address during the resolution process (as described in section 3.3).
 
 ### 1.1.2 Off-chain DIDs
 
-Off-chain names, sometimes called *subdomains* in the Blockstack literature,
-refer to names whose transaction histories are persisted and managed outside of
-the BNS contract's state.
+Off-chain DIDs are based on [BNS
+subdomains](https://docs.stacks.co/build-apps/references/bns#subdomains), these
+are names whose records are stored off-chain, but are collectively anchored to
+the blockchain. The ownership and state for these names lives within the P2P
+network data. Like their on-chain counterparts, subdomains are globally unique,
+strongly owned, and human-readable. BNS gives them their own name state and
+public keys. Unlike on-chain names, subdomains can be created and managed
+cheaply, because they are broadcast to the BNS network in batches. Section 3.2
+goes outlines the nuances of the registration process in more detail.
 
-Off-chain name transactions are encoded in batches. These batched updates are
-distributed using the Atlas network, and periodically anchored to the Stacks
-blockchain (i.e. the hash of the batched updates is recorded) by the owner of
-the corresponding on-chain name (i.e. the owner of `example.com` is responsible
-for publishing updates on behalf of registered off-chain names, e.g.
-`info.example.com`).
-
-This design provides off-chain names with the same safety properties as on-chain
-names, i.e.:
-- off-chain names are globally unique (enforced by the subdomain registrar)
-- off-chain names can be arbitrary human-meaningful strings 
-- off-chain names are owned by cryptographic key pairs  **TODO Remove this
-statement?**- all Blockstack nodes see the same linearized history of off-chain
-name operations.
-
-Off-chain names are instantiated by an on-chain name, indicated by the off-chain
-name's suffix.  For example, `cicero.res_publica.id` is an off-chain name whose
-initial transaction history is processed by the owner of the on-chain name
-`res_publica.id`.  Note that the owner of `res_publica.id` does *not* own
-`cicero.res_publica.id`, and cannot issue well-formed name updates to it.
+> Move these 2 paragraphs to 3.2?  Off-chain names are instantiated by an
+on-chain name, indicated by the off-chain name's suffix.  For example,
+`cicero.res_publica.id` is an off-chain name whose initial transaction history
+is processed by the owner of the on-chain name `res_publica.id`.  Note that the
+owner of `res_publica.id` does *not* own `cicero.res_publica.id`, and cannot
+issue well-formed name updates to it.
 
 Off-chain names -- and by extension, their corresponding DIDs -- have different
 liveness properties than on-chain names.  The Blockstack naming system protocol
-requires the owner of `res_publica.id` to propagate the signed
-transactions that instantiate and transfer ownership of `cicero.res_publica.id`.
-However, *any* on-chain name can process a name update for an off-chain name --
-that is, an update that changes where the name's assocaited state resides. For
-details as to why this is the case, please refer to the [Blockstack subdomain
+requires the owner of `res_publica.id` to propagate the signed transactions that
+instantiate and transfer ownership of `cicero.res_publica.id`.  However, *any*
+on-chain name can process a name update for an off-chain name -- that is, an
+update that changes where the name's assocaited state resides. For details as to
+why this is the case, please refer to the [Blockstack subdomain
 documentation](https://docs.blockstack.org/core/naming/subdomains.html).
 
 An off-chain DID is similarly structured to an on-chain DID. Like on-chain
 names, each off-chain name is owned by an address (but not necessarily an
-address on the blockchain). A DID for an off-chain name can be derived by
-concatenating the address of the subdomain owner and identifier of the
-transaction which published the batch of updates (normally a `name-update`
-function call).
+address on the blockchain).  A resolvable Stacks V2 DID can be derived for any
+existing off-chain name by concatenating two pieces of information:
+
+- The address of the subdomain owner, e.g.
+  `SP6G7N19FKNW24XH5JQ5P5WR1DN10QWMKMF1WMB3`
+- The identifier of the Stacks transaction (created by the on-chain name owner)
+  which anchored the relevant batch of updates on the Stacks blockchain, e.g.
+  `d27cb8d9cd4a9f21b1582c5c89a0d303aa613261ad41b729b48bf714f9cd1a02`
+
+*The transactionID above is invalid, it's a name update operation for an
+on-chain name, not off-chain, TODO update once good example is found*
+
+The resulting did -
+`did:stacks:v2:SP6G7N19FKNW24XH5JQ5P5WR1DN10QWMKMF1WMB3-d27cb8d9cd4a9f21b1582c5c89a0d303aa613261ad41b729b48bf714f9cd1a02`
+contains enough information to retrieve and verify the public keys associated
+with the address during the resolution process (as described in section 3.3).
 
 # 2. Blockstack DID Method
 
 The namestring that shall identify this DID method is: `stack:v2`
 
 A DID that uses this method *MUST* begin with the following literal prefix:
-`did:stack:v2`.  The remainder of the DID is its namespace-specific identifier.
+`did:stack:v2`.  The remainder of the DID is its method-specific identifier.
 
-# 2.1 Namespace-Specific Identifier
+# 2.1 Method-Specific Identifier
 
-The namespace-specific identifier (NSI) of the Blockstack DID encodes two pieces
-of information:  an address, and a Stacks transaction identifier.
+The method-specific identifier of the Blockstack DID encodes two pieces of
+information:  an address, and a Stacks transaction identifier.
 
 The **address** shall be a base58check encoding of a version byte concatenated
 with  the RIPEMD160 hash of a SHA256 hash of a DER-encoded secp256k1 public key.
@@ -154,14 +175,14 @@ address = base58.b58check_encode(version_byte + ripemd160_sha256_pubkey.decode('
 # '1331okvQ3Jr2efzaJE42Supevzfzg8ahYW'
 ```
 
-The **transaction identifier** shall be a valid Stacks transaction ID (32 hex
-encoded bytes), identifiying a `name-register`, `name-update`, or a
-[`name-import`](./https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L438)
-transaction sent to the BNS smart contract. The referenced transaction will be
-fetched and should include enough information to start the resolution process
-(i.e. bind the DID to a registered name).
+The **transaction identifier** shall reference a Stacks blockchain transaction
+which registered / updated the BNS name associated with the address. The
+referenced transaction is expected to encode a `name-register`, `name-update` or
+`name-import` call to the BNS smart contract.
 
-## 2.2 Address Encodings -- Is this section still relevant?
+## 2.2 Address Encodings
+*is this still required? not part of our current implementation, the mainnet
+aspect might be relevant*
 
 The address's version byte encodes whether or not a DID corresponds to an
 on-chain name transaction or an off-chain name transaction, and whether or not
@@ -186,7 +207,7 @@ encode to the following base58check strings:
 ## 3.1 Creating a Blockstack DID
 
 Creating a Blockstack DID requires registering a name -- be it on-chain or
-off-chain. The following subsections describe the two types of names, as well as
+off-chain. The following subsections describe how the two types of names, as well as
 resulting DIDs.
 
 #### On-chain names
@@ -296,7 +317,7 @@ complete set of off-chain zone files can translate any name into its DID, and
 translate any DID into its name.
 
 Given a blockstacks v2 did, the resolution process would look as follows:
-1. Separate the `address` and `transactionId` parts of the DID's NSI.
+1. Separate the `address` and `transactionId` parts of the DID's method-specific identifier.
 2. Fetch the transaction referenced by the provided `transactionId`.
 3. Ensure the transaction is valid (i.e. correct method call, correct contract
    address, etc.)
@@ -320,37 +341,6 @@ Given a blockstacks v2 did, the resolution process would look as follows:
 This resolution process is [implemented as part of the corresponding resolver
 module](./). Feel free to refer to the implementaiton for additional insights
 into the individual validation steps.
-
-
-// Since DID registration in Blockstack is achieved by first registering a name,
-// the user must first determine the DID's NSI.  To do so, the user simply
-requests // it from a Blockstack node of their choice as a GET request to the
-node's // `/v1/dids/{:blockstack_did}` endpoint.  The response must be a JSON
-object with // a `public_key` field containing the secp256k1 public key that
-hashes to the // DID's address, and a `document` field containing the DDO.  The
-DDO's `publicKey` field // shall be an array of objects with one element, where
-the  // only element describes the `public_key` given in the top-level object.
-
-For example:
-
-```bash
-$ curl -s https://core.blockstack.org/v1/dids/did:stack:v0:15gxXgJyT5tM5A4Cbx99nwccynHYsBouzr-0 | jq
-{
-   'public_key': '022af593b4449b37899b34244448726aa30e9de13c518f6184a29df40823d82840', 
-   'document': { 
-      ...
-      '@context': 'https://w3id.org/did/v1', 
-      'publicKey': [
-         {
-            'id': 'did:stack:v0:15gxXgJyT5tM5A4Cbx99nwccynHYsBouzr-0', 
-            'type': 'secp256k1',
-            'publicKeyHex': '022af593b4449b37899b34244448726aa30e9de13c518f6184a29df40823d82840'
-         }
-      ],
-      ...
-   }
-}
-```
 
 ## 3.4 Updating a Blockstack DID
 
