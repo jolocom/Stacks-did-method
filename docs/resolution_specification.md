@@ -65,25 +65,12 @@ whose records are stored directly on the blockchain. The ownership and state of
 these names are controlled by sending blockchain transactions to the BNS smart
 contract.
 
-Instantiating an on-chain name requires two calls to the BNS contract:
-1. First a call to the
-   [`name-preorder`](./https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L581)
-   function needs to be made. This transaction commits to a salted hashed name
-   and burns the required registration fee.
-2. Once the name has been preordered, a call to the
-   [`name-register`](.https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L609/)
-   function can be made to finalize the registration process. This transaction
-   reveals the salt and the registered name to the network. If the operation
-   succeeds, the BNS contract state will be updated  to include a new entry,
-   mapping the newly registered name to it's owner's address (hash of the public
-   key) and a zonefile hash.
-
- On-chain names can be resolved by calling the
- [`name-resolve`](https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L928)
- function on the BNS contract. The function will return the name's current owner
- (i.e. address), the hash of the associated zonefile (which can be resolved
- using the Blockstack's Atlas network), as well as metadata related to the
- registration / expiry times.
+On-chain names can be resolved by calling the
+[`name-resolve`](https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L928)
+function on the BNS contract. The function will return the name's current owner
+(i.e. address), the hash of the associated zonefile (which can be resolved
+using the Blockstack's Atlas peer network), as well as metadata related to the
+registration / expiry times.
 
 A resolvable Stacks V2 DID can be derived for any existing on-chain name by
 concatenating two pieces of information:
@@ -110,13 +97,7 @@ public keys. Unlike on-chain names, subdomains can be created and managed
 cheaply, because they are broadcast to the BNS network in batches. Section 3.2
 goes outlines the nuances of the registration process in more detail.
 
-> Move these 2 paragraphs to 3.2?  Off-chain names are instantiated by an
-on-chain name, indicated by the off-chain name's suffix.  For example,
-`cicero.res_publica.id` is an off-chain name whose initial transaction history
-is processed by the owner of the on-chain name `res_publica.id`.  Note that the
-owner of `res_publica.id` does *not* own `cicero.res_publica.id`, and cannot
-issue well-formed name updates to it.
-
+*TODO Move this paragraph elsewhere, or simplify*
 Off-chain names -- and by extension, their corresponding DIDs -- have different
 liveness properties than on-chain names.  The Blockstack naming system protocol
 requires the owner of `res_publica.id` to propagate the signed transactions that
@@ -206,45 +187,50 @@ encode to the following base58check strings:
 
 ## 3.1 Creating a Blockstack DID
 
-Creating a Blockstack DID requires registering a name -- be it on-chain or
-off-chain. The following subsections describe how the two types of names, as well as
-resulting DIDs.
+A Stacks v2 DID can be easily derived from any registered on-chain / off-chain BNS name. Therefore the process of registering a Stacks v2 DID is reduced to registering the desired underlying BNS name. The following subsections will describe how both on-chain and off-chain BNS names can be created, as well as the resulting Stacks DIDs.
 
 #### On-chain names
-To register an on-chain name, the user must call two methods on the underlying
-BNS smart contract. As mentioned in section 1.1.1, the following calls are
-required:
+
+Instantiating an on-chain name requires two calls to the BNS smart contract:
 
 1. First a call to the
    [`name-preorder`](./https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L581)
    function needs to be made. This transaction commits to a salted hashed name
-   and burns / pays the required registration fee.
-2. Once the name has been preordered, a call to the
+   and burns the required registration fee (depends on the name / namespace).
+2. Once the preorder transaction has been processed and accepted by the network, a call to the
    [`name-register`](.https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L609/)
-   function is required to finalize the registration process. This transaction
-   reveals the salt and the name to all BNS nodes, and updates the contract
-   state to include an entry associating the name with an initial address (i.e.
-   public key hash) and zonefile hash.
+   function can be made to finalize the registration process. This transaction
+   reveals the salt and the registered name to the network. If the operation
+   succeeds, the BNS contract state will be updated  to include a new entry,
+   mapping the newly registered name to it's owner's address (hash of the public
+   key) and a zonefile hash.
 
-Once a name has been registered, a Stacks V2 DID can be constructed
+Once both steps have been completed, a resolvable Stacks v2 DID can be derived for this name by concatenating the address of the name owner (the sender of the `name-register` transaction), and the identifier of the transaction broadcasted in step 2.
 
-the current owner, as well as their public key(s), can be retrieved with the
-help of the BNS contract. Section 3.2.0 elaborates on the process of resolution.
+A Stacks v2 on-chain DID can be derived this way for any on-chain name (newly registered or already existing). In the current system therefore registering a on-chain BNS name is the only thing required in order to register the corresponding DID.
 
-
-**TODO Update with TX example and reference(s) to possible registrar
- implementation(s).**  Details on the wire formats for these transactions can be
- found in Appendix A.  Blockstack supplies both a [graphical
- tool](https://github.com/blockstack/blockstack-browser) and a [command-line
- tool](https://github.com/blockstackl/cli-blockstack) for generating and
- broadcasting these transactions, as well as a  [reference
- library](https://github.com/blockstack/blockstack.js).  **END TOOD**
+**TODO Update with TX example and reference(s) to stacks.js/bns.**  
+Details on the wire formats for these transactions can be found in Appendix A.
+Blockstack supplies both a [graphical
+tool](https://github.com/blockstack/blockstack-browser) and a [command-line
+tool](https://github.com/blockstackl/cli-blockstack) for generating and
+broadcasting these transactions, as well as a  [reference
+library](https://github.com/blockstack/blockstack.js).
+**END TOOD**
 
 #### Off-chain names
-To register an off-chain name, the user must be able to submit a request to an
-off-chain registrar.  Anyone with an on-chain name (e.g. `res_publica.id`) can
-operate a registrar and allow for the registration of associated off-chain names
-(e.g. `info.res_publica.id`).  A reference registrar implementation can be found
+Unlike an on-chain name, a subdomain owner needs an on-chain name owner's help
+to broadcast their subdomain operations. In particular, a subdomain-creation
+transaction can only be processed by the owner of the on-chain name that shares
+its suffix. For example, only the owner of `res_publica.id` can broadcast
+subdomain-creation transactions for subdomain names ending in `.res_publica.id`.
+
+To register an off-chain name, the user must submit a request to the
+corresponding off-chain registrar. Anyone with an on-chain name (e.g.
+`res_publica.id`) can operate such a registrar and allow for the registration of
+associated off-chain names / subdomains (e.g. `info.res_publica.id`).  A
+reference registrar implementation can be found reference registrar
+implementation can be found
 [here](https://github.com/blockstack/subdomain-registrar).
 
 To register an off-chain DID, the user must submit a JSON body as a HTTP POST
@@ -279,21 +265,25 @@ following properties:
   public key that hashes to the `owner_address` field, per section 2.1.
 
 Once the registrar accumulates enough requests, it can anchor a new batch of
-subdomain registration / update operations.  The name owner (`res_publica.id`)
-needs to create a new zonefile, which embeds the accumulated operations for it's
-subdomains as individual TXT records. Each TXT resource record lists a zonefile
-for a subdomain, as well as it's associated owner, and some further metadata.
-The zonefile with the all embedded subdomain operations can be distributed via
-the Blockstack Atlas network. The zonefile is also hashed, and the resulting
-value is included in a `name-update` operation. This call updates the BNS
-contract state to include the new zonefile hash, and "anchors" the batch of
-updates on the Stacks blockchain. The zonefile associated with the hash can be
-retrieved at any point (e.g. as part of DID resolution) using the Blockstack
-Atlas network.
+subdomain registration / update operations. This is achieved by storing
+subdomain records in the BNS name zone files (e.g. the zonefile associated with
+`res_publica.id`). An on-chain name owner broadcasts subdomain operations by
+encoding them as TXT records within a DNS zone file. To
+broadcast the zone file, the name owner sets the new zone file hash with a
+`name-update` transaction and replicates the zone file. This, in turn, replicates
+all subdomain operations it contains, and anchors the set of subdomain
+operations to an on-chain transaction. The BNS node's consensus rules ensure
+that only valid subdomain operations from valid `name-update` transactions will
+ever be stored.
 
 Once the transaction confirms and the off-chain zone files are propagated to the
 peer network, any Blockstack node will be able to resolve the off-chain name's
 associated DID.
+
+Once the off-chain name has been registered, a resolvable Stacks v2 DID can be derived for this name by concatenating the address of the subdomain owner, and the identifier of the `name-update` transaction broadcasted by the respective name owner.
+
+Just like in the case of on-chain DIDs, a Stacks v2 off-chain DID can be derived this way for any off-chain name (newly registered or already existing). In the current system therefore registering a off-chain BNS name is the only thing required in order to register the corresponding DID.
+
 
 ## 3.2  Storing a Blockstack DID's DDO
 
