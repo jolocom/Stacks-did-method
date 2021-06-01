@@ -1,14 +1,20 @@
 import {
   makeRandomPrivKey,
   getPublicKey,
-  getAddressFromPublicKey,
-  TransactionVersion,
   StacksPrivateKey,
   StacksPublicKey,
   createStacksPrivateKey,
+  createStandardPrincipal,
+  publicKeyToAddress,
+  AddressVersion,
+  StacksTransaction,
+  parseAssetInfoString,
+  createFungiblePostCondition,
+  createLPList,
 } from "@stacks/transactions"
-import "isomorphic-fetch"
-import { encaseP, map } from "fluture"
+import { fetchTransactionById } from "../api"
+import Future, { chain, resolve, reject, FutureInstance } from "fluture"
+import BN = require("bn.js")
 
 export type StacksKeyPair = {
   privateKey: StacksPrivateKey
@@ -26,31 +32,46 @@ export const getKeyPair = (privateKey?: string | Buffer): StacksKeyPair => {
   }
 }
 
-const fuelAddress = (address: string) => {
-  const endpoint =
-    "https://stacks-node-api.testnet.stacks.co/extended/v1/faucets/stx?address="
-  const request = new Request(`${endpoint}${address}`, {
-    method: "POST",
-  })
+export const addSpendPostCondition =
+  (publicKey: StacksPublicKey) => (tx: StacksTransaction) => {
+    // const pc = createFungiblePostCondition(
+    //   createStandardPrincipal(
+    //     publicKeyToAddress(AddressVersion.TestnetSingleSig, publicKey)
+    //   ),
+    //   3,
+    //   new BN(0),
+    //   parseAssetInfoString("S0000000000000000000002AA028H.BURNED::BURNED")
+    // )
+    // tx.postConditions = createLPList([pc])
+    // tx.setFee(new BN(500))
+    return tx
+  }
 
-  return encaseP(fetch)(request).pipe(map((res) => res.ok))
+export const waitForConfirmation = (
+  txId: string,
+  delay: number = 3000
+): FutureInstance<Error, {}> => {
+  return wait(delay)
+    .pipe(chain(() => fetchTransactionById(txId)))
+    .pipe(
+      chain((tx) => {
+        if (tx.tx_status === "pending") {
+          return waitForConfirmation(txId)
+        }
+
+        if (tx.tx_status === "success") {
+          return resolve(tx)
+        }
+
+        return reject(new Error(`Tx failed, ${tx.tx_status} ${txId}`))
+      })
+    )
 }
 
-export const getFueledKeyPair = () => {
-  const { privateKey, publicKey } = getKeyPair()
-  const addr = getAddressFromPublicKey(
-    publicKey.data,
-    TransactionVersion.Testnet
-  )
-
-  return fuelAddress(addr).pipe(
-    map(
-      (ok) =>
-        ok && {
-          privateKey,
-          publicKey,
-          address: addr,
-        }
-    )
-  )
+export const wait = (ms: number): FutureInstance<never, void> => {
+  console.log(`Pending, trying again in ${ms / 1000} sec`)
+  return Future((_, res) => {
+    const t = setTimeout(res, ms)
+    return () => clearTimeout(t)
+  })
 }

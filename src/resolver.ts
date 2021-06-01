@@ -8,11 +8,12 @@ import {
   verifyTokenAndGetPubKey,
   extractTokenFileUrl,
 } from "./utils/signedToken"
-import { decodeFQN } from "./utils/general"
+import { decodeFQN, testNetAddrToMainNetAddr } from "./utils/general"
 import {
   parseStacksV2DID,
   buildDidDoc,
   isMigratedOnChainDid,
+  buildStacksV2DID,
 } from "./utils/did"
 import {
   parseZoneFileAndExtractTokenUrl,
@@ -33,6 +34,7 @@ import {
   reject,
   resolve as fResolve,
   FutureInstance,
+  fork,
 } from "fluture"
 import { Left, Either } from "monet"
 
@@ -66,7 +68,7 @@ const getPublicKeyForMigratedDid = ({
       })
     )
     .pipe(chain((result) => result.fold(reject, fetchSignedToken)))
-    .pipe(map(verifyTokenAndGetPubKey(c32ToB58(address))))
+    .pipe(map(verifyTokenAndGetPubKey(testNetAddrToMainNetAddr(address))))
     .pipe(
       chain((either) =>
         either.fold<FutureInstance<Error, string>>(reject, fResolve)
@@ -99,7 +101,7 @@ const getPublicKeyForDID = (did: StacksV2DID): FutureInstance<Error, string> =>
         )
       )
     )
-    .pipe(map(verifyTokenAndGetPubKey(c32ToB58(did.address))))
+    .pipe(map(verifyTokenAndGetPubKey(testNetAddrToMainNetAddr(did.address))))
     .pipe(
       chain((either) =>
         either.fold<FutureInstance<Error, string>>(reject, fResolve)
@@ -116,36 +118,11 @@ export const resolve = (did: string) =>
     )
     .fold(reject, identity)
 
-// Does the address still own the name assigned to it at registration?
-// Ensures that the key has not been changed as well
-// TODO May have to account for key rotation
-// export const isDidStillActive = (
-//   { name, subdomain, ownerAddress, namespace, publicKeyHex }: NameRecord,
-//   currentZoneFile: string
-// ) => {
-//   const parsedZoneFile = parseZoneFile(currentZoneFile)
-//
-//   if (!parsedZoneFile) {
-//     return Left(
-//       new Error(
-//         `Failed to parse current zonefile, received content - ${currentZoneFile}`
-//       )
+// fork(console.log)(console.log)(
+//   resolve(
+//     buildStacksV2DID(
+//       "STRYYQQ9M8KAF4NS7WNZQYY59X93XEKR31JP64CP",
+//       "0xb621d4cf589511eb3f563fc84c876e596c009c84d534a142c7141325064ae714"
 //     )
-//   }
-//
-//   return getRecordsForName(
-//     {
-//       name,
-//       namespace,
-//       subdomain,
-//       owner: ownerAddress,
-//     },
-//     currentZoneFile
 //   )
-//     .map(parseZoneFile)
-//     .map(extractTokenFileUrl)
-//     .cata(reject, fetchSignedToken)
-//     .pipe(chain(fetchSignedToken))
-//     .pipe(chain(curry(flip(verifyProfileToken))(ownerAddress)))
-//     .pipe(map((v) => v["payload"]["subject"].publicKey === publicKeyHex))
-// }
+// )

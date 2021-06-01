@@ -16,7 +16,7 @@ export const parseAndValidateTransaction = (
   txData: any
 ): Either<Error, string[]> => {
   // TODO Include name-import
-  const allowedFunctionNames = ["name-register", "name-update"]
+  const allowedFunctionNames = ["name-register", "name-update", "name-renewal"]
   const contractCallData = txData["contract_call"]
 
   if (!contractCallData) {
@@ -78,12 +78,15 @@ export const extractContractCallArgs = (
   }
 
   const hexEncodedValues = [name, namespace, zonefileHash].map(
-    compose(stripHexPrefixIfPresent, cvToValue, hexToCV)
+    compose(cvToValue, hexToCV, stripHexPrefixIfPresent)
   )
 
   return Right({
     name: hexToAscii(hexEncodedValues[0]),
     namespace: hexToAscii(hexEncodedValues[1]),
-    zonefileHash: hexEncodedValues[2],
+    zonefileHash:
+      typeof hexEncodedValues[2] === "string"
+        ? stripHexPrefixIfPresent(hexEncodedValues[2])
+        : stripHexPrefixIfPresent(hexEncodedValues[2].value),
   })
 }

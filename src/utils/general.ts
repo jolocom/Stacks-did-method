@@ -1,3 +1,5 @@
+import { c32addressDecode, c32address, c32ToB58 } from "c32check/lib/address"
+
 export const stripHexPrefixIfPresent = (data: string) => {
   if (data.startsWith("0x")) return data.substr(2)
 
@@ -40,4 +42,17 @@ export const decodeFQN = (fqdn: string): FQN => {
       namespace,
     }
   }
+}
+
+export const testNetAddrToMainNetAddr = (address: string) => {
+  const [version, hash] = c32addressDecode(address)
+  if (version === 22) {
+    return address
+  }
+
+  if (version === 26) {
+    return c32ToB58(c32address(22, hash))
+  }
+
+  throw new Error("Unknown version number, " + version)
 }

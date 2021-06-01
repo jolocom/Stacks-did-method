@@ -4,14 +4,19 @@ import { range, flatten } from "ramda"
 import { buildStacksV2DID } from "../src/utils/did"
 import { resolve } from "../src/"
 import { promise } from "fluture"
-
+import {
+  preorderAndRegisterName,
+  rotateKey,
+} from "../src/registrar/index"
+import { getKeyPair, wait } from "../src/registrar/utils"
+import { StacksMocknet } from "@stacks/network"
 import { b58ToC32 } from "c32check"
 import * as chai from "chai"
 import { BNS_CONTRACT_DEPLOY_TXID } from "../src/constants"
-import {
-  parseZoneFileAndExtractTokenUrl,
-  getRecordsForName,
-} from "../src/utils/zonefile"
+import { parseZoneFileAndExtractTokenUrl } from "../src/utils/zonefile"
+import { setup } from './setup'
+import { randomBytes } from "crypto"
+const b58 = require("bs58")
 
 var chaiAsPromised = require("chai-as-promised")
 
@@ -20,29 +25,95 @@ var assert = chai.assert
 chai.use(chaiAsPromised)
 chai.should()
 
+const namesHistory: {[k: string]: string[]} = {
+}
+
+const mockNet = new StacksMocknet()
+
+const regularDIDKeyPair = getKeyPair(
+  Buffer.from(
+    "e75dcb66f84287eaf347955e94fa04337298dbd95aa0dbb985771104ef1913db01",
+    "hex"
+  )
+)
+
+const rotatedKeyDIDKeyPair = getKeyPair(
+  Buffer.from(
+    "21d43d2ae0da1d9d04cfcaac7d397a33733881081f0b2cd038062cf0ccbb752601",
+    "hex"
+  )
+)
+
+const transferredNameKeyPair = getKeyPair(
+  Buffer.from(
+    "c71700b07d520a8c9731e4d0f095aa6efb91e16e25fb27ce2b72e7b698f8127a01",
+    "hex"
+  )
+)
+
 describe("did:stacks:v2 resolver", () => {
-  describe("resolve", () => {
+  let testNamespace = "testns"
+  let testName = "testname"
+  let testDid: string = ""
+
+  before(async () => {
+//     const {did} = await setup(namesHistory)(testName, testNamespace, mockNet, regularDIDKeyPair)
+//     testDid = did
+  })
+
+  describe("resolution", () => {
+    describe("Stacks V2 DIDs", () => {
+      it("Should correctly register / resolve simple v2 DID", async () => {
+        return promise(resolve(testDid)).then((didDoc) => {
+          console.log(didDoc)
+          assert(didDoc.verificationMethod.length === 1)
+          assert(didDoc.verificationMethod[0].id === didDoc.authentication[0])
+          assert(didDoc.id === testDid)
+          assert(
+            didDoc.verificationMethod[0].publicKeyBase58 === b58.encode(regularDIDKeyPair.publicKey.data),
+            'DID Doc should include the correct key'
+          )
+        })
+      })
+
+      it.only("Should correctly resolve v2 DID after the key was rotated", async () => {
+        await rotateKey(
+          testName,
+          testNamespace,
+          regularDIDKeyPair,
+          rotatedKeyDIDKeyPair,
+          mockNet
+        )
+
+        return promise(resolve(testDid)).then((didDoc) => {
+          assert(didDoc.verificationMethod.length === 1)
+          assert(didDoc.verificationMethod[0].id === didDoc.authentication[0])
+          assert(didDoc.id === testDid)
+          assert(
+            didDoc.verificationMethod[0].publicKeyBase58 === b58.encode(rotatedKeyDIDKeyPair.publicKey.data),
+            'DID Doc should include the new key'
+          )
+        })
+      })
+    })
+
     // Name 1.id, imported with the deployment of the BNS contract
     it("should resolve v2 DID based on imported on-chain names", async () => {
       const testAddr = "SP1FRDVA4JAZ4TC93XZC850QAY6R4MTHN10XZJ035"
       const testDid = buildStacksV2DID(testAddr, BNS_CONTRACT_DEPLOY_TXID.main)
+    })
+
+    it("should resolve v2 DID", async () => {
+      const txId =
+        "0xe80ce11f84287ff364712e632be3213eabbe6b556d5f02b9dabd793d2c3ef5e6"
+      const testAddr = "STRYYQQ9M8KAF4NS7WNZQYY59X93XEKR31JP64CP"
+      const testDid = buildStacksV2DID(testAddr, txId)
 
       return promise(resolve(testDid)).then((didDoc) => {
         assert(didDoc.verificationMethod.length === 1)
         assert(didDoc.verificationMethod[0].id === didDoc.authentication[0])
         assert(didDoc.id === testDid)
       })
-    })
-
-    // Name unpublished.app, registered at txId. Public key which signs the token has since been rotated it seems.
-    it("Should fail to resolve a v2 DID if public key was rotated", async () => {
-      const testAddr = "SP6G7N19FKNW24XH5JQ5P5WR1DN10QWMKMF1WMB3"
-      const txId =
-        "d27cb8d9cd4a9f21b1582c5c89a0d303aa613261ad41b729b48bf714f9cd1a02"
-      const testDid = buildStacksV2DID(testAddr, txId)
-
-      // await resolve(testDid)
-      return assert.isRejected(promise(resolve(testDid)))
     })
   })
 
