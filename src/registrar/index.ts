@@ -6,10 +6,10 @@ import {
   buildReadyNamespaceTx,
   buildRenewNameTx,
   buildTransferNameTx,
+  buildRevokeNameTx,
 } from "@stacks/bns"
 import { StacksNetwork } from "@stacks/network"
 import { encodeFQN } from "../utils/general"
-import { getKeyPair } from "./utils"
 import {
   StacksKeyPair,
   waitForConfirmation,
@@ -35,9 +35,7 @@ import {
 import { fetchNameInfo } from "../api"
 import { STX_TO_BURN } from "../constants"
 
-import { StacksMocknet } from "@stacks/network"
-
-export const preorderNamespace = async (
+const preorderNamespace = async (
   namespace: string,
   network: StacksNetwork,
   keyPair: StacksKeyPair
@@ -65,7 +63,7 @@ export const preorderNamespace = async (
     })
 }
 
-export const revealNamespace = (
+const revealNamespace = (
   namespace: string,
   network: StacksNetwork,
   keyPair: StacksKeyPair
@@ -93,7 +91,7 @@ export const revealNamespace = (
   })
 }
 
-export const readyNamespace = (
+const readyNamespace = (
   namespace: string,
   network: StacksNetwork,
   keyPair: StacksKeyPair
@@ -115,13 +113,13 @@ export const readyNamespace = (
   })
 }
 
-export const preorderName = (
+const preorderName = (
   name: string,
   namespace: string,
   keyPair: StacksKeyPair,
   network: StacksNetwork
 ) => {
-  const fqn = encodeFQN(name, namespace)
+  const fqn = encodeFQN({ name, namespace })
   console.log(`PREORDERING NAME - ${fqn}`)
 
   return buildPreorderNameTx({
@@ -143,14 +141,14 @@ export const preorderName = (
     })
 }
 
-export const registerName = (
+const registerName = (
   name: string,
   namespace: string,
   keyPair: StacksKeyPair,
   zonefile: string,
   network: StacksNetwork
 ) => {
-  const fqn = encodeFQN(name, namespace)
+  const fqn = encodeFQN({ name, namespace })
   console.log(`REGISTERING NAME - ${fqn}`)
   return buildRegisterNameTx({
     fullyQualifiedName: fqn,
@@ -167,23 +165,22 @@ export const registerName = (
       return broadcastTransaction(tx, network, Buffer.from(zonefile)).then(
         (txId) => {
           //@ts-ignore
-          return promise(waitForConfirmation(txId as string)
-            .pipe(chain(() => wait(5000)))).then(
-            () => txId as string
-          )
+          return promise(
+            waitForConfirmation(txId as string).pipe(chain(() => wait(5000)))
+          ).then(() => txId as string)
         }
       )
     })
 }
 
-export const transferName = async (
+const transferName = async (
   name: string,
   namespace: string,
   currentKeyPair: StacksKeyPair,
   newKeyPair: StacksKeyPair,
   network: StacksNetwork
 ) => {
-  const fqn = encodeFQN(name, namespace)
+  const fqn = encodeFQN({ name, namespace })
   console.log(`TRANSFERRING NAME - ${fqn}`)
 
   const signed = signProfileToken(
@@ -200,40 +197,44 @@ export const transferName = async (
     TransactionVersion.Testnet
   )
 
-  return buildTransferNameTx({
-    fullyQualifiedName: fqn,
-    newOwnerAddress,
-    network,
-    zonefile: zf,
-    publicKey: currentKeyPair.publicKey.data.toString("hex"),
-  })
-    // .then(addSpendPostCondition(currentKeyPair.publicKey))
-    .then((tx) => {
-      const signer = new TransactionSigner(tx)
-      signer.signOrigin(currentKeyPair.privateKey)
+  return (
+    buildTransferNameTx({
+      fullyQualifiedName: fqn,
+      newOwnerAddress,
+      network,
+      zonefile: zf,
+      publicKey: currentKeyPair.publicKey.data.toString("hex"),
+    })
+      // .then(addSpendPostCondition(currentKeyPair.publicKey))
+      .then((tx) => {
+        const signer = new TransactionSigner(tx)
+        signer.signOrigin(currentKeyPair.privateKey)
 
-      return broadcastTransaction(tx, network, Buffer.from(zf)).then((txId) => {
-        console.log(txId)
-          // @ts-ignore
-        return promise(
-          //@ts-ignore Waiting for the zonefile to propagate
-          waitForConfirmation(txId as string)
-            .pipe(chain(() => wait(5000)))
-            .pipe(map(() => txId))
+        return broadcastTransaction(tx, network, Buffer.from(zf)).then(
+          (txId) => {
+            console.log(txId)
+            // @ts-ignore
+            return promise(
+              //@ts-ignore Waiting for the zonefile to propagate
+              waitForConfirmation(txId as string)
+                .pipe(chain(() => wait(5000)))
+                .pipe(map(() => txId))
+            )
+          }
         )
       })
-    })
+  )
 }
 
-
-export const renewName = async (
+// Not currently used
+const renewName = async (
   name: string,
   namespace: string,
   currentKeyPair: StacksKeyPair,
   newKeyPair: StacksKeyPair,
   network: StacksNetwork
 ) => {
-  const fqn = encodeFQN(name, namespace)
+  const fqn = encodeFQN({ name, namespace })
   console.log(`RENEWING NAME - ${fqn}`)
 
   const signed = signProfileToken(
@@ -293,7 +294,7 @@ export const preorderAndRegisterName = async (
   network: StacksNetwork,
   keyPair: StacksKeyPair
 ) => {
-  const fqn = encodeFQN(name, namespace)
+  const fqn = encodeFQN({ name, namespace })
   await preorderName(name, namespace, keyPair, network)
 
   const signed = signProfileToken(
@@ -309,56 +310,39 @@ export const preorderAndRegisterName = async (
   return await registerName(name, namespace, keyPair, zf, network)
 }
 
-
-let testNamespace = "testns"
-let testName = "testname"
-
-const registerTestName = async (
-  name: string,
-  namespace: string,
-  network: StacksNetwork,
-  keyPair: StacksKeyPair
+export const revokeName = async (
+  fqn: string,
+  keyPair: StacksKeyPair,
+  network: StacksNetwork
 ) => {
-  await registerNamespace(namespace, network, keyPair)
-  await preorderAndRegisterName(name, namespace, network, keyPair)
+  console.log(`REVOKING NAME - ${fqn}}`)
+
+  return buildRevokeNameTx({
+    fullyQualifiedName: fqn,
+    publicKey: keyPair.publicKey.data.toString("hex"),
+    network,
+  })
+    .then(addSpendPostCondition(keyPair.publicKey))
+    .then(async (tx) => {
+      const s = new TransactionSigner(tx)
+      s.signOrigin(keyPair.privateKey)
+
+      return broadcastTransaction(tx, network).then((txId) => {
+        //@ts-ignore string and error
+        return promise(waitForConfirmation(txId as string)).then(() => txId)
+      })
+    })
 }
 
-const regularDIDKeyPair = getKeyPair(
-  Buffer.from(
-    "e75dcb66f84287eaf347955e94fa04337298dbd95aa0dbb985771104ef1913db01",
-    "hex"
-  )
-)
-
-const rotatedKeyDIDKeyPair = getKeyPair(
-  Buffer.from(
-    "21d43d2ae0da1d9d04cfcaac7d397a33733881081f0b2cd038062cf0ccbb752601",
-    "hex"
-  )
-)
-
-const transferredNameKeyPair = getKeyPair(
-  Buffer.from(
-    "c71700b07d520a8c9731e4d0f095aa6efb91e16e25fb27ce2b72e7b698f8127a01",
-    "hex"
-  )
-)
-
-const mockNet = new StacksMocknet()
-
-// registerNamespace(testNamespace, mockNet, regularDIDKeyPair)
-// preorderAndRegisterName(testName, testNamespace, mockNet, regularDIDKeyPair)
-// rotateKey(testName, testNamespace, regularDIDKeyPair, rotatedKeyDIDKeyPair, mockNet)
-
-export const storeTokenFile = (data: {}) => {
+const storeTokenFile = async (data: {}) => {
   const fd = new FormData()
   fd.append("file", Buffer.from(JSON.stringify([data])))
 
-  return fetch(`https://ipfs.jolocom.io/api/v0/add?pin=false`, {
+  const res = await fetch(`https://ipfs.jolocom.io/api/v0/add?pin=false`, {
     method: "POST",
     //@ts-ignore
     body: fd,
   })
-    .then((res) => res.json())
-    .then(({ Hash }) => `https://ipfs.jolocom.io/api/v0/cat/${Hash}`)
+  const { Hash } = await res.json()
+  return `https://ipfs.jolocom.io/api/v0/cat/${Hash}`
 }

@@ -1,10 +1,10 @@
 import "isomorphic-fetch"
 import { prop } from "ramda"
-import { encaseP, map, FutureInstance } from "fluture"
+import { encaseP, map, resolve, chain, reject, FutureInstance } from "fluture"
 import { encodeFQN } from "./utils/general"
-import { debug } from "./utils/dev"
 
 const HOST = "http://localhost:3999"
+// const HOST = 'https://stacks-node-api.mainnet.stacks.co'
 
 const fetchJSON = <T>(endpoint: string): FutureInstance<Error, T> => {
   return encaseP<Error, T, string>(() =>
@@ -17,7 +17,7 @@ export const fetchZoneFileForName = (args: {
   namespace: string
   zonefileHash?: string
 }) => {
-  const fullName = encodeFQN(args.name, args.namespace)
+  const fullName = encodeFQN({name: args.name, namespace: args.namespace})
 
   const endpoint = `${HOST}/v1/names/${fullName}/zonefile/${args.zonefileHash}`
   return fetchJSON<{ zonefile: string }>(endpoint).pipe(map(prop("zonefile")))
@@ -25,12 +25,17 @@ export const fetchZoneFileForName = (args: {
 
 export const fetchNamesOwnedByAddress = (
   address: string,
-  chain = "stacks"
+  blockChain = "stacks"
 ): FutureInstance<Error, string[]> => {
-  console.log(`${HOST}/v1/addresses/${chain}/${address}`)
   return fetchJSON<{ names: string[] }>(
-    `${HOST}/v1/addresses/${chain}/${address}`
-  ).pipe(map(prop("names")))
+    `${HOST}/v1/addresses/${blockChain}/${address}`
+  ).pipe(map(prop("names"))).pipe(
+    chain(
+      names =>
+      names?.length > 0
+        ? resolve(names)
+        : reject(new Error('No names associated with DID'))
+  ))
 }
 
 type NameInfo = {
@@ -42,6 +47,7 @@ type NameInfo = {
   zonefile: string
   zonefile_hash: string
 }
+
 export const fetchNameInfo = ({
   name,
   namespace,
@@ -49,7 +55,7 @@ export const fetchNameInfo = ({
   name: string
   namespace: string
 }): FutureInstance<Error, NameInfo> => {
-  const endpoint = `${HOST}/v1/names/${encodeFQN(name, namespace)}`
+  const endpoint = `${HOST}/v1/names/${encodeFQN({name, namespace})}`
   return fetchJSON(endpoint)
 }
 
@@ -65,7 +71,6 @@ export const fetchTransactionById = (txId: string) => {
 }
 
 export const fetchSignedToken = (endpoint: string) => {
-  console.log(endpoint)
   return fetchJSON<any[]>(endpoint).pipe(map((el) => el[0]))
 }
 

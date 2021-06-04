@@ -9,15 +9,16 @@ export const stripHexPrefixIfPresent = (data: string) => {
 export const hexToAscii = (hex: string) =>
   Buffer.from(stripHexPrefixIfPresent(hex), "hex").toString("ascii")
 
-export const encodeFQN = (
-  name: string,
-  namespace: string,
+export const encodeFQN = (args: {
+  name: string
+  namespace: string
   subdomain?: string
-) => {
+}) => {
+  const { name, subdomain, namespace } = args
   return `${subdomain ? subdomain + "." : ""}${name}.${namespace}`
 }
 
-export type FQN = {
+type FQN = {
   name: string
   namespace: string
   subdomain?: string
@@ -44,10 +45,11 @@ export const decodeFQN = (fqdn: string): FQN => {
   }
 }
 
-export const testNetAddrToMainNetAddr = (address: string) => {
+// Given a testnet, or a mainnet c32 encoded address, will return the b58 encoded uncomressed address
+export const normalizeAddress = (address: string) => {
   const [version, hash] = c32addressDecode(address)
   if (version === 22) {
-    return address
+    return c32ToB58(address)
   }
 
   if (version === 26) {

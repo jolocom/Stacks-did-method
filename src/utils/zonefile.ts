@@ -6,21 +6,7 @@ import { Some, None, Maybe, Right, Left, Either } from "monet"
 const { parseZoneFile } = require("zone-file")
 const b58 = require("bs58")
 
-export const parseZoneFileTXT = (entries: string[]) =>
-  entries.reduce(
-    (parsed, current) => {
-      const [prop, value] = current.split("=")
-
-      if (prop.startsWith("zf")) {
-        return { ...parsed, zonefile: `${parsed.zonefile}${value}` }
-      }
-
-      return { ...parsed, [prop]: value }
-    },
-    { zonefile: "", owner: "" }
-  )
-
-export const getRecordsForName =
+export const getZonefileRecordsForName =
   ({
     name,
     namespace,
@@ -41,11 +27,11 @@ export const getRecordsForName =
       if (origin.subdomain && origin.subdomain !== subdomain) {
         return Left(
           new Error(
-            `Wrong zonefile, zf origin - ${origin}, looking for ${encodeFQN(
+            `Wrong zonefile, zf origin - ${origin}, looking for ${encodeFQN({
               name,
               namespace,
-              subdomain
-            )}`
+              subdomain,
+            })}`
           )
         )
       }
@@ -72,6 +58,20 @@ export const getRecordsForName =
     return Left(new Error("Zonefile $ORIGIN did not match passed name"))
   }
 
+const parseZoneFileTXT = (entries: string[]) =>
+  entries.reduce(
+    (parsed, current) => {
+      const [prop, value] = current.split("=")
+
+      if (prop.startsWith("zf")) {
+        return { ...parsed, zonefile: `${parsed.zonefile}${value}` }
+      }
+
+      return { ...parsed, [prop]: value }
+    },
+    { zonefile: "", owner: "" }
+  )
+
 const findNestedZoneFileByOwner = (
   zonefile: string,
   owner: string
@@ -96,6 +96,21 @@ const findNestedZoneFileByOwner = (
   return None()
 }
 
+export const parseZoneFileAndExtractNameinfo =
+  (owner: string) => (zonefile: string) => {
+    const parsedZf = parseZoneFile(zonefile)
+
+    const { name, namespace, subdomain } = decodeFQN(parsedZf["$origin"])
+
+    return extractTokenFileUrl(zonefile).map((url) => ({
+      name,
+      namespace,
+      subdomain,
+      owner,
+      tokenUrl: url,
+    }))
+  }
+
 export const parseZoneFileAndExtractTokenUrl = (
   zonefile: string,
   owner: string
@@ -104,7 +119,7 @@ export const parseZoneFileAndExtractTokenUrl = (
 
   const { name, namespace, subdomain } = decodeFQN(parsedZf["$origin"])
 
-  return getRecordsForName({
+  return getZonefileRecordsForName({
     name,
     namespace,
     owner,

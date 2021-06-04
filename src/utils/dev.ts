@@ -1,4 +1,4 @@
-import { buildStacksV2DID } from "./did"
+import { encodeStacksV2Did } from "./did"
 import { decodeFQN } from "./general"
 import { fetchAllNames, fetchNameInfo, fetchZoneFileForName } from "../api"
 import { None, Some } from "monet"
@@ -6,7 +6,7 @@ import { map, chain, mapRej, resolve } from "fluture"
 import { map as rMap } from "ramda"
 
 export const findValidNames =
-  (ignoreMigrated = false) =>
+  (onlyMigrated = false) =>
   (page = 0) => {
     return fetchAllNames(page).pipe(
       map(
@@ -14,7 +14,7 @@ export const findValidNames =
           const { name, namespace } = decodeFQN(fqn)
           return fetchNameInfo({ name, namespace }).pipe(
             chain((info) => {
-              if (ignoreMigrated && info["last_txid"] == "0x") {
+              if (onlyMigrated && info["last_txid"] !== "0x") {
                 return resolve(None())
               }
 
@@ -28,10 +28,10 @@ export const findValidNames =
                   map((res) =>
                     res
                       ? Some({
-                          did: buildStacksV2DID(
-                            info.address,
-                            info["last_txid"]
-                          ),
+                          did: encodeStacksV2Did({
+                            address: info.address,
+                            anchorTxId: info["last_txid"],
+                          }),
                           zonefile: res,
                         })
                       : None()

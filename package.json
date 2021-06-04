@@ -13,6 +13,7 @@
   "scripts": {
     "test": "mocha",
     "build": "yarn tsc -p ./tsconfig.json",
+    "format": "prettier --no-semi --write ./src/**/*.ts ./test/**/*.ts",
     "test:watch": "mocha --watch"
   },
   "devDependencies": {

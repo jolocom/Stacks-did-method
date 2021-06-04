@@ -4,10 +4,12 @@ import { StacksV2DID } from "../types"
 import { stripHexPrefixIfPresent } from "./general"
 import { last, split } from "ramda"
 import { Right, Left, Either } from "monet"
+import {
+  getZonefileRecordsForName,
+  parseZoneFileAndExtractNameinfo,
+  parseZoneFileAndExtractTokenUrl,
+} from "./zonefile"
 const b58 = require("bs58")
-
-export const buildStacksV2DID = (address: string, txId: string) =>
-  `${DID_METHOD_PREFIX}:${address}-${stripHexPrefixIfPresent(txId)}`
 
 export const buildDidDoc =
   (did: string) =>
@@ -66,3 +68,45 @@ export const isMigratedOnChainDid = (did: string | StacksV2DID) => {
   }
   return Object.values(BNS_CONTRACT_DEPLOY_TXID).includes(did.anchorTxId)
 }
+
+export const encodeStacksV2Did = (did: Omit<StacksV2DID, "prefix">) =>
+  `${DID_METHOD_PREFIX}:${did.address}-${stripHexPrefixIfPresent(
+    did.anchorTxId
+  )}`
+
+// @TODO Should establish the key and the address match
+// export const mapDidToName = (
+//   did: StacksV2DID
+// ): FutureInstance<Error, string> => {
+//   if (isMigratedOnChainDid(did)) {
+//     return fetchNamesOwnedByAddress(encodeStacksV2Did(did)).pipe(
+//       map((names) => names[0])
+//     )
+//   } else {
+//     return fetchTransactionById(did.anchorTxId)
+//       .pipe(map(parseAndValidateTransaction))
+//       .pipe(
+//         chain((txEither) =>
+//           txEither.fold(reject, (nameInfo) =>
+//             fetchZoneFileForName(nameInfo).pipe(
+//               map(
+//                 getZonefileRecordsForName({ ...nameInfo, owner: did.address })
+//               )
+//             )
+//           )
+//         )
+//       )
+//       .pipe(
+//         map((zfEither) =>
+//           zfEither
+//             .flatMap(parseZoneFileAndExtractNameinfo(did.address))
+//             .map(encodeFQN)
+//         )
+//       )
+//       .pipe(
+//         chain((e) =>
+//           e.fold(reject, (fqn) => resolve(fqn) as FutureInstance<Error, string>)
+//         )
+//       )
+//   }
+// }
