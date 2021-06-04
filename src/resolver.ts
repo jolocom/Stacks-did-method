@@ -1,7 +1,7 @@
 import { identity } from "ramda"
 import { parseAndValidateTransaction } from "./utils/transactions"
 import { verifyTokenAndGetPubKey } from "./utils/signedToken"
-import { decodeFQN, encodeFQN, normalizeAddress } from "./utils/general"
+import { createRejectedFuture, decodeFQN, encodeFQN, normalizeAddress } from "./utils/general"
 import {
   parseStacksV2DID,
   buildDidDoc,
@@ -19,6 +19,7 @@ import {
   fetchZoneFileForName,
   fetchTransactionById,
   fetchSignedToken,
+  getCurrentBlockNumber,
 } from "./api"
 import {
   chain,
@@ -149,31 +150,28 @@ const getPublicKeyForDID = (did: StacksV2DID) =>
 // 1. Name revoked
 // 2 name expired / not active?
 
-const isDidRevoked = ({ did, name }: { name: string; did: string }) => {
+const ensureDidNotRevoked = ({ did, name }: { name: string; did: string }): FutureInstance<Error, string> => {
   const fqn = decodeFQN(name)
-  // TODO
+
+  // TODO Can subdmains be revoked? How would we find out?
   if (fqn.subdomain) {
-    return fResolve({
-      revoked: false,
-      did,
-    })
+    return fResolve(did)
   }
 
   return fetchNameInfo(fqn).pipe(
-    map((currentInfo) => {
+    chain((currentInfo) => {
       if (currentInfo.status === "name-revoke") {
-        return {
-          revoked: true,
-          did,
-        }
+        return createRejectedFuture<Error, string>(new Error('Name bound to DID was revoked'))
       }
 
-      return {
-        revoked: false,
-        did,
-      }
-    })
-  )
+      return getCurrentBlockNumber().pipe(chain(currentBlock => {
+        if(currentInfo.expire_block > currentBlock) {
+          return createRejectedFuture<Error, string>(new Error('Name bound to DID expired'))
+        }
+
+        return fResolve(did) as FutureInstance<Error, string>
+      }))
+    }))
 }
 
 export const resolve = (did: string) =>
@@ -185,11 +183,8 @@ export const resolve = (did: string) =>
           : getPublicKeyForDID(parsedDID)
         ).pipe(
           chain(({ name, publicKey }) =>
-            isDidRevoked({ name, did }).pipe(
-              chain(({ did, revoked }) =>
-                revoked
-                  ? reject(new Error("DID Revoked"))
-                  : fResolve(buildDidDoc(did)(publicKey))
+            ensureDidNotRevoked({ name, did }).pipe(
+              map(did => buildDidDoc(did)(publicKey)
               )
             )
           )

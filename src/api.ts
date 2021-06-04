@@ -77,3 +77,8 @@ export const fetchSignedToken = (endpoint: string) => {
 export const fetchAllNames = (page = 0) => {
   return fetchJSON<string[]>(`${HOST}/v1/names?page=${page}`)
 }
+
+export const getCurrentBlockNumber = () => {
+  return fetchJSON<{stacks_tip_height: number}>(`${HOST}/v2/info`)
+    .pipe(map(prop('stacks_tip_height')))
+}

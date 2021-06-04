@@ -6,7 +6,7 @@ import { map, chain, mapRej, resolve } from "fluture"
 import { map as rMap } from "ramda"
 
 export const findValidNames =
-  (onlyMigrated = false) =>
+  (onlyMigrated = false, ignoreExpired = false) =>
   (page = 0) => {
     return fetchAllNames(page).pipe(
       map(
@@ -15,6 +15,11 @@ export const findValidNames =
           return fetchNameInfo({ name, namespace }).pipe(
             chain((info) => {
               if (onlyMigrated && info["last_txid"] !== "0x") {
+                return resolve(None())
+              }
+
+              //@TODO 17474
+              if(ignoreExpired && info.expire_block > 17474) {
                 return resolve(None())
               }
 

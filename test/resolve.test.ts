@@ -36,7 +36,7 @@ const rotatedKeyPair = getKeyPair(
 )
 
 describe("did:stacks:v2 resolver", () => {
-  let testNamespace = "testns"
+  let testNamespace = "namespace"
   let testName = "testname"
   let testDid: string = ""
 
@@ -63,17 +63,28 @@ describe("did:stacks:v2 resolver", () => {
       it("Should fail to resolve v2 DID after name was revoked", async () => {
         const testFqn = encodeFQN({ name: testName, namespace: testNamespace })
         await revokeName(testFqn, initialKeyPair, mockNet)
-        return expect(resolve(testDid)).rejectedWith("DID Revoked")
+        return expect(resolve(testDid)).rejectedWith("Name bound to DID was revoked")
       })
 
-      it.skip("correctly resolves imported Stacks v2 DID", async () => {
-        const testAddr = "SP15XBGYRVMKF1TWPXE6A3M0T2A87VYSVF9VFSZ1A"
+      it.skip("correctly resolves v2 DID based on migrated name", async () => {
+        const testAddr = "SPWA58Z5C5JJW2TTJEM8VZA71NJW2KXXB2HA1V16"
         const testDid = encodeStacksV2Did({
           address: testAddr,
           anchorTxId: BNS_CONTRACT_DEPLOY_TXID.main,
         })
 
         return expect(resolve(testDid)).to.eventually.include({ id: testDid })
+      })
+
+      it.skip("fails to resolve v2 DID based on expired migrated name", async () => {
+        const testAddr = "SP15XBGYRVMKF1TWPXE6A3M0T2A87VYSVF9VFSZ1A"
+        const testDid = encodeStacksV2Did({
+          address: testAddr,
+          anchorTxId: BNS_CONTRACT_DEPLOY_TXID.main,
+        })
+
+        return expect(resolve(testDid))
+          .rejectedWith('Name bound to DID expired')
       })
 
       it.skip("Should correctly resolve v2 DID after the key was rotated", async () => {
@@ -97,7 +108,7 @@ describe("did:stacks:v2 resolver", () => {
   describe.skip("utils", () => {
     it("find all names", async () => {
       return fork(console.log)(console.log)(
-        parallel(2)(range(0)(17).map(findValidNames(false)))
+        parallel(2)(range(0)(17).map(findValidNames(true, true)))
           .pipe(map(flatten))
           .pipe(chain(parallel(5)))
       )
