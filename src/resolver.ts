@@ -200,11 +200,9 @@ export const resolve = (did: string) =>
         (isMigratedOnChainDid(parsedDID)
           ? getPublicKeyForMigratedDid(parsedDID)
           : getPublicKeyForDID(parsedDID)
-        )
-        .pipe(
+        ).pipe(
           chain(({ name, publicKey }) =>
-            ensureDidNotRevoked({ name, did })
-            .pipe(
+            ensureDidNotRevoked({ name, did }).pipe(
               map((did) => buildDidDoc(did)(publicKey))
             )
           )

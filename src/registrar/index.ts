@@ -7,16 +7,12 @@ import {
   buildRenewNameTx,
   buildTransferNameTx,
   buildRevokeNameTx,
-  buildUpdateNameTx
+  buildUpdateNameTx,
 } from "@stacks/bns"
 import { StacksNetwork } from "@stacks/network"
 const { parseZoneFile, makeZoneFile } = require("zone-file")
 import { decodeFQN, encodeFQN, normalizeAddress } from "../utils/general"
-import {
-  StacksKeyPair,
-  waitForConfirmation,
-  wait,
-} from "./utils"
+import { StacksKeyPair, waitForConfirmation, wait } from "./utils"
 import {
   TransactionSigner,
   broadcastTransaction,
@@ -24,7 +20,7 @@ import {
   TransactionVersion,
   getPublicKey,
   AddressVersion,
-  publicKeyToAddress
+  publicKeyToAddress,
 } from "@stacks/transactions"
 
 import FormData from "form-data"
@@ -55,16 +51,15 @@ const preorderNamespace = async (
     stxToBurn: STX_TO_BURN,
     publicKey: keyPair.publicKey.data.toString("hex"),
     network,
-  })
-    .then(async (tx) => {
-      const s = new TransactionSigner(tx)
-      s.signOrigin(keyPair.privateKey)
+  }).then(async (tx) => {
+    const s = new TransactionSigner(tx)
+    s.signOrigin(keyPair.privateKey)
 
-      return broadcastTransaction(tx, network).then((txId) => {
-        //@ts-ignore string and error
-        return promise(waitForConfirmation(txId as string)).then(() => txId)
-      })
+    return broadcastTransaction(tx, network).then((txId) => {
+      //@ts-ignore string and error
+      return promise(waitForConfirmation(txId as string)).then(() => txId)
     })
+  })
 }
 
 const revealNamespace = (
@@ -132,16 +127,15 @@ const preorderName = (
     stxToBurn: STX_TO_BURN,
     network,
     publicKey: keyPair.publicKey.data.toString("hex"),
-  })
-    .then((tx) => {
-      const signer = new TransactionSigner(tx)
-      signer.signOrigin(keyPair.privateKey)
+  }).then((tx) => {
+    const signer = new TransactionSigner(tx)
+    signer.signOrigin(keyPair.privateKey)
 
-      return broadcastTransaction(tx, network).then((txId) => {
-        //@ts-ignore
-        return promise(waitForConfirmation(txId as string)).then(() => txId)
-      })
+    return broadcastTransaction(tx, network).then((txId) => {
+      //@ts-ignore
+      return promise(waitForConfirmation(txId as string)).then(() => txId)
     })
+  })
 }
 
 const registerName = (
@@ -159,20 +153,19 @@ const registerName = (
     salt: "salt",
     zonefile,
     network,
-  })
-    .then((tx) => {
-      const signer = new TransactionSigner(tx)
-      signer.signOrigin(keyPair.privateKey)
+  }).then((tx) => {
+    const signer = new TransactionSigner(tx)
+    signer.signOrigin(keyPair.privateKey)
 
-      return broadcastTransaction(tx, network, Buffer.from(zonefile)).then(
-        (txId) => {
-          //@ts-ignore
-          return promise(
-            waitForConfirmation(txId as string).pipe(chain(() => wait(5000)))
-          ).then(() => txId as string)
-        }
-      )
-    })
+    return broadcastTransaction(tx, network, Buffer.from(zonefile)).then(
+      (txId) => {
+        //@ts-ignore
+        return promise(
+          waitForConfirmation(txId as string).pipe(chain(() => wait(5000)))
+        ).then(() => txId as string)
+      }
+    )
+  })
 }
 
 const transferName = async (
@@ -199,31 +192,26 @@ const transferName = async (
     TransactionVersion.Testnet
   )
 
-  return (
-    buildTransferNameTx({
-      fullyQualifiedName: fqn,
-      newOwnerAddress,
-      network,
-      zonefile: zf,
-      publicKey: currentKeyPair.publicKey.data.toString("hex"),
-    })
-      .then((tx) => {
-        const signer = new TransactionSigner(tx)
-        signer.signOrigin(currentKeyPair.privateKey)
+  return buildTransferNameTx({
+    fullyQualifiedName: fqn,
+    newOwnerAddress,
+    network,
+    zonefile: zf,
+    publicKey: currentKeyPair.publicKey.data.toString("hex"),
+  }).then((tx) => {
+    const signer = new TransactionSigner(tx)
+    signer.signOrigin(currentKeyPair.privateKey)
 
-        return broadcastTransaction(tx, network, Buffer.from(zf)).then(
-          (txId) => {
-            // @ts-ignore
-            return promise(
-              //@ts-ignore Waiting for the zonefile to propagate
-              waitForConfirmation(txId as string)
-                .pipe(chain(() => wait(5000)))
-                .pipe(map(() => txId))
-            )
-          }
-        )
-      })
-  )
+    return broadcastTransaction(tx, network, Buffer.from(zf)).then((txId) => {
+      // @ts-ignore
+      return promise(
+        //@ts-ignore Waiting for the zonefile to propagate
+        waitForConfirmation(txId as string)
+          .pipe(chain(() => wait(5000)))
+          .pipe(map(() => txId))
+      )
+    })
+  })
 }
 
 // Not currently used
@@ -258,21 +246,20 @@ const renewName = async (
     network,
     zonefile: zf,
     publicKey: currentKeyPair.publicKey.data.toString("hex"),
-  })
-    .then((tx) => {
-      const signer = new TransactionSigner(tx)
-      signer.signOrigin(currentKeyPair.privateKey)
+  }).then((tx) => {
+    const signer = new TransactionSigner(tx)
+    signer.signOrigin(currentKeyPair.privateKey)
 
-      return broadcastTransaction(tx, network, Buffer.from(zf)).then((txId) => {
-        // @ts-ignore
-        return promise(
-          //@ts-ignore Waiting for the zonefile to propagate
-          waitForConfirmation(txId as string)
-            .pipe(chain(() => wait(5000)))
-            .pipe(chain(() => fetchNameInfo({ name, namespace })))
-        )
-      })
+    return broadcastTransaction(tx, network, Buffer.from(zf)).then((txId) => {
+      // @ts-ignore
+      return promise(
+        //@ts-ignore Waiting for the zonefile to propagate
+        waitForConfirmation(txId as string)
+          .pipe(chain(() => wait(5000)))
+          .pipe(chain(() => fetchNameInfo({ name, namespace })))
+      )
     })
+  })
 }
 
 export const rotateKey = transferName
@@ -320,15 +307,14 @@ export const revokeName = async (
     fullyQualifiedName: fqn,
     publicKey: keyPair.publicKey.data.toString("hex"),
     network,
-  })
-    .then(async (tx) => {
-      const s = new TransactionSigner(tx)
-      s.signOrigin(keyPair.privateKey)
+  }).then(async (tx) => {
+    const s = new TransactionSigner(tx)
+    s.signOrigin(keyPair.privateKey)
 
-      return broadcastTransaction(tx, network).then((txId) =>
-        promise(waitForConfirmation(txId as string)).then(() => txId)
-      )
-    })
+    return broadcastTransaction(tx, network).then((txId) =>
+      promise(waitForConfirmation(txId as string)).then(() => txId)
+    )
+  })
 }
 
 const storeTokenFile = async (data: {}) => {
@@ -344,59 +330,86 @@ const storeTokenFile = async (data: {}) => {
   return `https://ipfs.jolocom.io/api/v0/cat/${Hash}`
 }
 
-export const updateName = async(fqn: string, newZoneFile: string, keyPair: StacksKeyPair, network: StacksNetwork) => {
+export const updateName = async (
+  fqn: string,
+  newZoneFile: string,
+  keyPair: StacksKeyPair,
+  network: StacksNetwork
+) => {
   return buildUpdateNameTx({
     fullyQualifiedName: fqn,
     zonefile: newZoneFile,
-    publicKey: keyPair.publicKey.data.toString('hex'),
-    network
+    publicKey: keyPair.publicKey.data.toString("hex"),
+    network,
   }).then(async (tx) => {
-      const s = new TransactionSigner(tx)
-      s.signOrigin(keyPair.privateKey)
+    const s = new TransactionSigner(tx)
+    s.signOrigin(keyPair.privateKey)
 
-      return broadcastTransaction(tx, network, Buffer.from(newZoneFile)).then(txId =>
-        promise(waitForConfirmation(txId as string)).then(() => txId)
-      )
+    return broadcastTransaction(tx, network, Buffer.from(newZoneFile)).then(
+      (txId) => promise(waitForConfirmation(txId as string)).then(() => txId)
+    )
   })
 }
 
-export const registerSubdomain = async (fqn: string, nameOwnerKey: StacksKeyPair, subdomainOptions: {
-  owner?: string,
-  ownerKeyPair: StacksKeyPair
-}, network: StacksNetwork) => {
-    const {name, namespace, subdomain} = decodeFQN(fqn)
+export const registerSubdomain = async (
+  fqn: string,
+  nameOwnerKey: StacksKeyPair,
+  subdomainOptions: {
+    owner?: string
+    ownerKeyPair: StacksKeyPair
+  },
+  network: StacksNetwork
+) => {
+  const { name, namespace, subdomain } = decodeFQN(fqn)
 
-    if (!subdomain) {
-      throw new Error('provided fqn must include subdomain')
-    }
+  if (!subdomain) {
+    throw new Error("provided fqn must include subdomain")
+  }
 
-    const currentZf = await promise(fetchZoneFileForName({
+  const currentZf = await promise(
+    fetchZoneFileForName({
       name,
-      namespace
-    }))
-
-    const parsed = parseZoneFile(currentZf)
-
-    const subdomainZoneFile = await buildSubdomainZoneFile(fqn, subdomainOptions.ownerKeyPair)
-
-    const address = publicKeyToAddress(AddressVersion.TestnetSingleSig, getPublicKey(subdomainOptions.ownerKeyPair.privateKey))
-    const owner = subdomainOptions.owner || address
-
-    const newSubdomainOp = subdomainOpToZFPieces(subdomainZoneFile, normalizeAddress(owner), subdomain)
-    if (parsed?.txt?.length) {
-      parsed.txt.push(newSubdomainOp)
-    } else {
-      parsed.txt = [newSubdomainOp]
-    }
-
-    const ZONEFILE_TEMPLATE = '{$origin}\n{$ttl}\n{txt}{uri}'
-
-    const txId = await updateName(encodeFQN({name, namespace}), makeZoneFile(parsed, ZONEFILE_TEMPLATE), nameOwnerKey, network)
-
-    return encodeStacksV2Did({
-      address: owner, 
-      anchorTxId: txId as string
+      namespace,
     })
+  )
+
+  const parsed = parseZoneFile(currentZf)
+
+  const subdomainZoneFile = await buildSubdomainZoneFile(
+    fqn,
+    subdomainOptions.ownerKeyPair
+  )
+
+  const address = publicKeyToAddress(
+    AddressVersion.TestnetSingleSig,
+    getPublicKey(subdomainOptions.ownerKeyPair.privateKey)
+  )
+  const owner = subdomainOptions.owner || address
+
+  const newSubdomainOp = subdomainOpToZFPieces(
+    subdomainZoneFile,
+    normalizeAddress(owner),
+    subdomain
+  )
+  if (parsed?.txt?.length) {
+    parsed.txt.push(newSubdomainOp)
+  } else {
+    parsed.txt = [newSubdomainOp]
+  }
+
+  const ZONEFILE_TEMPLATE = "{$origin}\n{$ttl}\n{txt}{uri}"
+
+  const txId = await updateName(
+    encodeFQN({ name, namespace }),
+    makeZoneFile(parsed, ZONEFILE_TEMPLATE),
+    nameOwnerKey,
+    network
+  )
+
+  return encodeStacksV2Did({
+    address: owner,
+    anchorTxId: txId as string,
+  })
 }
 
 const buildSubdomainZoneFile = async (fqn: string, keyPair: StacksKeyPair) => {
@@ -413,13 +426,14 @@ const buildSubdomainZoneFile = async (fqn: string, keyPair: StacksKeyPair) => {
   return zf
 }
 
-function subdomainOpToZFPieces(zonefile: string, owner: string, subdomainName: string, signature?: string) {
+function subdomainOpToZFPieces(
+  zonefile: string,
+  owner: string,
+  subdomainName: string,
+  signature?: string
+) {
   const destructedZonefile = destructZonefile(zonefile)
-  const txt = [
-    `owner=${owner}`,
-    `seqn=0`,
-    `parts=${destructedZonefile.length}`
-  ]
+  const txt = [`owner=${owner}`, `seqn=0`, `parts=${destructedZonefile.length}`]
   destructedZonefile.forEach((zfPart, ix) => txt.push(`zf${ix}=${zfPart}`))
 
   if (signature) {
@@ -428,12 +442,12 @@ function subdomainOpToZFPieces(zonefile: string, owner: string, subdomainName: s
 
   return {
     name: subdomainName,
-    txt
+    txt,
   }
 }
 
 function destructZonefile(zonefile: string) {
-  const encodedZonefile = Buffer.from(zonefile).toString('base64')
+  const encodedZonefile = Buffer.from(zonefile).toString("base64")
   // we pack into 250 byte strings -- the entry "zf99=" eliminates 5 useful bytes,
   // and the max is 255.
   const pieces = 1 + Math.floor(encodedZonefile.length / 250)
@@ -447,4 +461,3 @@ function destructZonefile(zonefile: string) {
   }
   return destructed
 }
-

@@ -5,7 +5,7 @@ import {
   StacksPublicKey,
   createStacksPrivateKey,
   isCompressed,
-  compressPublicKey
+  compressPublicKey,
 } from "@stacks/transactions"
 import { fetchTransactionById } from "../api"
 import Future, { chain, resolve, reject, FutureInstance } from "fluture"
@@ -23,7 +23,9 @@ export const getKeyPair = (privateKey?: string | Buffer): StacksKeyPair => {
   const publicKey = getPublicKey(priv)
   return {
     privateKey: priv,
-    publicKey: isCompressed(publicKey) ? publicKey : compressPublicKey(publicKey.data),
+    publicKey: isCompressed(publicKey)
+      ? publicKey
+      : compressPublicKey(publicKey.data),
   }
 }
 

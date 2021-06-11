@@ -45,13 +45,17 @@ export const getZonefileRecordsForName =
         }
       }
 
-
       if (origin.subdomain && origin.subdomain === subdomain) {
         return Right(zonefile)
       }
 
       if (parsedZoneFile.txt && owner) {
-        return Right(findNestedZoneFileByOwner(zonefile, owner).cata(() => zonefile, nestedZf => nestedZf))
+        return Right(
+          findNestedZoneFileByOwner(zonefile, owner).cata(
+            () => zonefile,
+            (nestedZf) => nestedZf
+          )
+        )
       }
 
       if (!origin.subdomain && !subdomain) {
