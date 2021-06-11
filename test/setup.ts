@@ -75,7 +75,7 @@ export const setupSubdomains = async (
     encodeFQN({
       name,
       namespace,
-      subdomain: "0",
+      subdomain: randomBytes(4).toString("hex"),
     }),
     nameOwnerKey,
     {
