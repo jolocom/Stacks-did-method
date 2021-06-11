@@ -1,13 +1,16 @@
 import { StacksNetwork } from "@stacks/network"
-import { StacksKeyPair } from "../src/registrar/utils"
+import { getKeyPair, StacksKeyPair, wait } from "../src/registrar/utils"
 import {
   preorderAndRegisterName,
   registerNamespace,
+  registerSubdomain
 } from "../src/registrar/index"
 import { decodeFQN, encodeFQN } from "../src/utils/general"
 import { fetchNameInfo } from "../src/api"
 import { map, promise } from "fluture"
 import { encodeStacksV2Did } from "../src/utils/did"
+import { randomBytes } from 'crypto'
+import { AddressVersion, getPublicKey, publicKeyToAddress, publicKeyToString } from "@stacks/transactions"
 
 export const setup = async (
   name: string,
@@ -34,3 +37,43 @@ export const getDIDFromName = (fqn: string) => {
     )
   )
 }
+
+export const setupSubdomains = async (fqn: string, nameOwnerKey: StacksKeyPair, network: StacksNetwork) => {
+  const { name, namespace } = decodeFQN(fqn)
+  const keyPair1 = getKeyPair()
+
+  const validDid = await registerSubdomain(encodeFQN({
+      name,
+      namespace,
+      subdomain: randomBytes(4).toString('hex')
+    }), nameOwnerKey, {
+      ownerKeyPair: keyPair1
+    }, network)
+
+    const keyPair2 = getKeyPair()
+    const invalidOwner = publicKeyToAddress(AddressVersion.TestnetSingleSig, getKeyPair().publicKey)
+
+    await(promise(wait(2500)))
+    const invalidDid = await registerSubdomain(encodeFQN({
+      name,
+      namespace,
+      subdomain: '0'
+    }), nameOwnerKey, {
+      ownerKeyPair: keyPair2,
+      owner: invalidOwner
+    }, network)
+
+    await(promise(wait(2500)))
+
+    return {
+      validDid: {
+        did: validDid,
+        key: keyPair1
+      },
+      invalidDid: {
+        did: invalidDid,
+        key: keyPair2
+      }
+    }
+}
+

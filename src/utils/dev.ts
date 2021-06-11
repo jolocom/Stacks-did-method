@@ -19,7 +19,7 @@ export const findValidNames =
               }
 
               //@TODO 17474
-              if(ignoreExpired && info.expire_block > 17474) {
+              if (ignoreExpired && info.expire_block > 17474) {
                 return resolve(None())
               }
 

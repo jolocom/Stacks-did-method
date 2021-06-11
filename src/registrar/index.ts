@@ -7,20 +7,24 @@ import {
   buildRenewNameTx,
   buildTransferNameTx,
   buildRevokeNameTx,
+  buildUpdateNameTx
 } from "@stacks/bns"
 import { StacksNetwork } from "@stacks/network"
-import { encodeFQN } from "../utils/general"
+const { parseZoneFile, makeZoneFile } = require("zone-file")
+import { decodeFQN, encodeFQN, normalizeAddress } from "../utils/general"
 import {
   StacksKeyPair,
   waitForConfirmation,
   wait,
-  addSpendPostCondition,
 } from "./utils"
 import {
   TransactionSigner,
   broadcastTransaction,
   getAddressFromPublicKey,
   TransactionVersion,
+  getPublicKey,
+  AddressVersion,
+  publicKeyToAddress
 } from "@stacks/transactions"
 
 import FormData from "form-data"
@@ -32,8 +36,9 @@ import {
   signProfileToken,
   wrapProfileToken,
 } from "@stacks/profile"
-import { fetchNameInfo } from "../api"
+import { fetchNameInfo, fetchZoneFileForName } from "../api"
 import { STX_TO_BURN } from "../constants"
+import { encodeStacksV2Did } from "../utils/did"
 
 const preorderNamespace = async (
   namespace: string,
@@ -51,7 +56,6 @@ const preorderNamespace = async (
     publicKey: keyPair.publicKey.data.toString("hex"),
     network,
   })
-    .then(addSpendPostCondition(keyPair.publicKey))
     .then(async (tx) => {
       const s = new TransactionSigner(tx)
       s.signOrigin(keyPair.privateKey)
@@ -129,7 +133,6 @@ const preorderName = (
     network,
     publicKey: keyPair.publicKey.data.toString("hex"),
   })
-    .then(addSpendPostCondition(keyPair.publicKey))
     .then((tx) => {
       const signer = new TransactionSigner(tx)
       signer.signOrigin(keyPair.privateKey)
@@ -157,7 +160,6 @@ const registerName = (
     zonefile,
     network,
   })
-    .then(addSpendPostCondition(keyPair.publicKey))
     .then((tx) => {
       const signer = new TransactionSigner(tx)
       signer.signOrigin(keyPair.privateKey)
@@ -205,14 +207,12 @@ const transferName = async (
       zonefile: zf,
       publicKey: currentKeyPair.publicKey.data.toString("hex"),
     })
-      // .then(addSpendPostCondition(currentKeyPair.publicKey))
       .then((tx) => {
         const signer = new TransactionSigner(tx)
         signer.signOrigin(currentKeyPair.privateKey)
 
         return broadcastTransaction(tx, network, Buffer.from(zf)).then(
           (txId) => {
-            console.log(txId)
             // @ts-ignore
             return promise(
               //@ts-ignore Waiting for the zonefile to propagate
@@ -259,7 +259,6 @@ const renewName = async (
     zonefile: zf,
     publicKey: currentKeyPair.publicKey.data.toString("hex"),
   })
-    .then(addSpendPostCondition(currentKeyPair.publicKey))
     .then((tx) => {
       const signer = new TransactionSigner(tx)
       signer.signOrigin(currentKeyPair.privateKey)
@@ -315,22 +314,20 @@ export const revokeName = async (
   keyPair: StacksKeyPair,
   network: StacksNetwork
 ) => {
-  console.log(`REVOKING NAME - ${fqn}}`)
+  console.log(`REVOKING NAME - ${fqn}`)
 
   return buildRevokeNameTx({
     fullyQualifiedName: fqn,
     publicKey: keyPair.publicKey.data.toString("hex"),
     network,
   })
-    .then(addSpendPostCondition(keyPair.publicKey))
     .then(async (tx) => {
       const s = new TransactionSigner(tx)
       s.signOrigin(keyPair.privateKey)
 
-      return broadcastTransaction(tx, network).then((txId) => {
-        //@ts-ignore string and error
-        return promise(waitForConfirmation(txId as string)).then(() => txId)
-      })
+      return broadcastTransaction(tx, network).then((txId) =>
+        promise(waitForConfirmation(txId as string)).then(() => txId)
+      )
     })
 }
 
@@ -346,3 +343,108 @@ const storeTokenFile = async (data: {}) => {
   const { Hash } = await res.json()
   return `https://ipfs.jolocom.io/api/v0/cat/${Hash}`
 }
+
+export const updateName = async(fqn: string, newZoneFile: string, keyPair: StacksKeyPair, network: StacksNetwork) => {
+  return buildUpdateNameTx({
+    fullyQualifiedName: fqn,
+    zonefile: newZoneFile,
+    publicKey: keyPair.publicKey.data.toString('hex'),
+    network
+  }).then(async (tx) => {
+      const s = new TransactionSigner(tx)
+      s.signOrigin(keyPair.privateKey)
+
+      return broadcastTransaction(tx, network, Buffer.from(newZoneFile)).then(txId =>
+        promise(waitForConfirmation(txId as string)).then(() => txId)
+      )
+  })
+}
+
+export const registerSubdomain = async (fqn: string, nameOwnerKey: StacksKeyPair, subdomainOptions: {
+  owner?: string,
+  ownerKeyPair: StacksKeyPair
+}, network: StacksNetwork) => {
+    const {name, namespace, subdomain} = decodeFQN(fqn)
+
+    if (!subdomain) {
+      throw new Error('provided fqn must include subdomain')
+    }
+
+    const currentZf = await promise(fetchZoneFileForName({
+      name,
+      namespace
+    }))
+
+    const parsed = parseZoneFile(currentZf)
+
+    const subdomainZoneFile = await buildSubdomainZoneFile(fqn, subdomainOptions.ownerKeyPair)
+
+    const address = publicKeyToAddress(AddressVersion.TestnetSingleSig, getPublicKey(subdomainOptions.ownerKeyPair.privateKey))
+    const owner = subdomainOptions.owner || address
+
+    const newSubdomainOp = subdomainOpToZFPieces(subdomainZoneFile, normalizeAddress(owner), subdomain)
+    if (parsed?.txt?.length) {
+      parsed.txt.push(newSubdomainOp)
+    } else {
+      parsed.txt = [newSubdomainOp]
+    }
+
+    const ZONEFILE_TEMPLATE = '{$origin}\n{$ttl}\n{txt}{uri}'
+
+    const txId = await updateName(encodeFQN({name, namespace}), makeZoneFile(parsed, ZONEFILE_TEMPLATE), nameOwnerKey, network)
+
+    return encodeStacksV2Did({
+      address: owner, 
+      anchorTxId: txId as string
+    })
+}
+
+const buildSubdomainZoneFile = async (fqn: string, keyPair: StacksKeyPair) => {
+  const signedToken = signProfileToken(
+    new Profile(),
+    keyPair.privateKey.data.toString("hex")
+  )
+
+  const zf = makeProfileZoneFile(
+    fqn,
+    await storeTokenFile(wrapProfileToken(signedToken))
+  )
+
+  return zf
+}
+
+function subdomainOpToZFPieces(zonefile: string, owner: string, subdomainName: string, signature?: string) {
+  const destructedZonefile = destructZonefile(zonefile)
+  const txt = [
+    `owner=${owner}`,
+    `seqn=0`,
+    `parts=${destructedZonefile.length}`
+  ]
+  destructedZonefile.forEach((zfPart, ix) => txt.push(`zf${ix}=${zfPart}`))
+
+  if (signature) {
+    txt.push(`sig=${signature}`)
+  }
+
+  return {
+    name: subdomainName,
+    txt
+  }
+}
+
+function destructZonefile(zonefile: string) {
+  const encodedZonefile = Buffer.from(zonefile).toString('base64')
+  // we pack into 250 byte strings -- the entry "zf99=" eliminates 5 useful bytes,
+  // and the max is 255.
+  const pieces = 1 + Math.floor(encodedZonefile.length / 250)
+  const destructed = []
+  for (let i = 0; i < pieces; i++) {
+    const startIndex = i * 250
+    const currentPiece = encodedZonefile.slice(startIndex, startIndex + 250)
+    if (currentPiece.length > 0) {
+      destructed.push(currentPiece)
+    }
+  }
+  return destructed
+}
+

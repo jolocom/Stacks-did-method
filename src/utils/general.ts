@@ -46,7 +46,7 @@ export const decodeFQN = (fqdn: string): FQN => {
   }
 }
 
-// Given a testnet, or a mainnet c32 encoded address, will return the b58 encoded uncomressed address
+// Given a testnet, or a mainnet c32 encoded address, will return the b58 encoded uncompressed address
 export const normalizeAddress = (address: string) => {
   const [version, hash] = c32addressDecode(address)
   if (version === 22) {
@@ -60,6 +60,8 @@ export const normalizeAddress = (address: string) => {
   throw new Error("Unknown version number, " + version)
 }
 
-export const createRejectedFuture  = <R, F> (rejectWith: R): FutureInstance<R, F> => {
+export const createRejectedFuture = <R, F>(
+  rejectWith: R
+): FutureInstance<R, F> => {
   return reject(rejectWith) as FutureInstance<R, F>
 }

@@ -2,8 +2,8 @@ export const DID_METHOD_PREFIX = "did:stacks:v2"
 import BN = require("bn.js")
 
 export const BNS_ADDRESSES = {
-  test: "SP000000000000000000002Q6VF78.bns",
-  main: "ST000000000000000000002AMW42H.bns",
+  main: "SP000000000000000000002Q6VF78.bns",
+  test: "ST000000000000000000002AMW42H.bns",
 }
 
 export const BNS_CONTRACT_DEPLOY_TXID = {

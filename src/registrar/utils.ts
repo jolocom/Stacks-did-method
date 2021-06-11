@@ -4,17 +4,11 @@ import {
   StacksPrivateKey,
   StacksPublicKey,
   createStacksPrivateKey,
-  createStandardPrincipal,
-  publicKeyToAddress,
-  AddressVersion,
-  StacksTransaction,
-  parseAssetInfoString,
-  createFungiblePostCondition,
-  createLPList,
+  isCompressed,
+  compressPublicKey
 } from "@stacks/transactions"
 import { fetchTransactionById } from "../api"
 import Future, { chain, resolve, reject, FutureInstance } from "fluture"
-import BN = require("bn.js")
 
 export type StacksKeyPair = {
   privateKey: StacksPrivateKey
@@ -25,27 +19,13 @@ export const getKeyPair = (privateKey?: string | Buffer): StacksKeyPair => {
   const priv = privateKey
     ? createStacksPrivateKey(privateKey)
     : makeRandomPrivKey()
+
   const publicKey = getPublicKey(priv)
   return {
     privateKey: priv,
-    publicKey,
+    publicKey: isCompressed(publicKey) ? publicKey : compressPublicKey(publicKey.data),
   }
 }
-
-export const addSpendPostCondition =
-  (publicKey: StacksPublicKey) => (tx: StacksTransaction) => {
-    // const pc = createFungiblePostCondition(
-    //   createStandardPrincipal(
-    //     publicKeyToAddress(AddressVersion.TestnetSingleSig, publicKey)
-    //   ),
-    //   3,
-    //   new BN(0),
-    //   parseAssetInfoString("S0000000000000000000002AA028H.BURNED::BURNED")
-    // )
-    // tx.postConditions = createLPList([pc])
-    // tx.setFee(new BN(500))
-    return tx
-  }
 
 export const waitForConfirmation = (
   txId: string,

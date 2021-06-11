@@ -1,8 +1,9 @@
 import { c32ToB58 } from "c32check"
 import { extractTokenFileUrl } from "./signedToken"
-import { decodeFQN, encodeFQN } from "./general"
+import { decodeFQN, encodeFQN, normalizeAddress } from "./general"
 import "isomorphic-fetch"
 import { Some, None, Maybe, Right, Left, Either } from "monet"
+import { identity } from "ramda"
 const { parseZoneFile } = require("zone-file")
 const b58 = require("bs58")
 
@@ -44,11 +45,16 @@ export const getZonefileRecordsForName =
         }
       }
 
-      if (parsedZoneFile.txt && owner) {
-        return findNestedZoneFileByOwner(zonefile, owner).toEither()
+
+      if (origin.subdomain && origin.subdomain === subdomain) {
+        return Right(zonefile)
       }
 
-      if (origin.subdomain === subdomain) {
+      if (parsedZoneFile.txt && owner) {
+        return Right(findNestedZoneFileByOwner(zonefile, owner).cata(() => zonefile, nestedZf => nestedZf))
+      }
+
+      if (!origin.subdomain && !subdomain) {
         return Right(zonefile)
       }
 
@@ -80,8 +86,9 @@ const findNestedZoneFileByOwner = (
 
   if (parsedZoneFile.txt) {
     const match = parsedZoneFile.txt.find(
-      ({ txt }: { txt: string[]; name: string }) =>
-        parseZoneFileTXT(txt).owner === c32ToB58(owner)
+      ({ txt }: { txt: string[]; name: string }) => {
+        return parseZoneFileTXT(txt).owner === normalizeAddress(owner)
+      }
     )
 
     if (match) {
