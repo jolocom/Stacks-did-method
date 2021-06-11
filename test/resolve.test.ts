@@ -1,10 +1,14 @@
 import { fork, chain, parallel, map } from "fluture"
-import {randomBytes} from 'crypto'
+import { randomBytes } from "crypto"
 import { findValidNames } from "../src/utils/dev"
 import { range, flatten } from "ramda"
 import { buildDidDoc, encodeStacksV2Did } from "../src/utils/did"
 import { resolve } from "../src/"
-import { registerSubdomain, revokeName, rotateKey } from "../src/registrar/index"
+import {
+  registerSubdomain,
+  revokeName,
+  rotateKey,
+} from "../src/registrar/index"
 import { getKeyPair, StacksKeyPair } from "../src/registrar/utils"
 import { StacksMocknet } from "@stacks/network"
 import * as chai from "chai"
@@ -12,7 +16,12 @@ import { BNS_CONTRACT_DEPLOY_TXID } from "../src/constants"
 import { setup, setupSubdomains } from "./setup"
 import { encodeFQN } from "../src/utils/general"
 import { expect } from "chai"
-import { AddressVersion, compressPublicKey, getPublicKey, publicKeyToAddress } from "@stacks/transactions"
+import {
+  AddressVersion,
+  compressPublicKey,
+  getPublicKey,
+  publicKeyToAddress,
+} from "@stacks/transactions"
 const { parseZoneFile, makeZoneFile } = require("zone-file")
 const b58 = require("bs58")
 
@@ -49,7 +58,8 @@ const INIT_NAMESPACE = true
 describe("did:stacks:v2 resolver", () => {
   let testNamespace = "testn"
   let testName = "testname"
-  let testDid: string = "did:stacks:v2:STRYYQQ9M8KAF4NS7WNZQYY59X93XEKR31JP64CP-0x28f45561873326ddfb04d3af7e5388df793b28feea82c6fac78525d47746037f"
+  let testDid: string =
+    "did:stacks:v2:STRYYQQ9M8KAF4NS7WNZQYY59X93XEKR31JP64CP-0x28f45561873326ddfb04d3af7e5388df793b28feea82c6fac78525d47746037f"
 
   before(async () => {
     if (INIT_NAMESPACE) {
@@ -122,20 +132,24 @@ describe("did:stacks:v2 resolver", () => {
 
     describe("Off-chain Stacks v2 DIDs", () => {
       let testDidValid: {
-        did: string,
+        did: string
         key: StacksKeyPair
       }
 
       let testDidInvalid: {
-        did: string,
+        did: string
         key: StacksKeyPair
       }
 
       before(async () => {
-        const {invalidDid, validDid} = await setupSubdomains(encodeFQN({
-          name: testName, 
-          namespace: testNamespace
-        }), initialKeyPair, mockNet)
+        const { invalidDid, validDid } = await setupSubdomains(
+          encodeFQN({
+            name: testName,
+            namespace: testNamespace,
+          }),
+          initialKeyPair,
+          mockNet
+        )
 
         testDidValid = validDid
         testDidInvalid = invalidDid
@@ -143,23 +157,34 @@ describe("did:stacks:v2 resolver", () => {
 
       it("correctly resolves off-chain Stacks v2 DID", async () => {
         const compressedPublicKey = compressPublicKey(
-            getPublicKey(testDidValid.key.privateKey).data
+          getPublicKey(testDidValid.key.privateKey).data
         )
 
         return expect(resolve(testDidValid.did)).to.eventually.deep.eq(
-          buildDidDoc(testDidValid.did)(compressedPublicKey.data.toString('hex'))
+          buildDidDoc(testDidValid.did)(
+            compressedPublicKey.data.toString("hex")
+          )
         )
       })
 
-      it('fails to resolve non-existent valid DID', async () => {
-        const mockTxId = randomBytes(32).toString('hex')
-        const randomAddress = publicKeyToAddress(AddressVersion.TestnetSingleSig, getKeyPair().publicKey)
+      it("fails to resolve non-existent valid DID", async () => {
+        const mockTxId = randomBytes(32).toString("hex")
+        const randomAddress = publicKeyToAddress(
+          AddressVersion.TestnetSingleSig,
+          getKeyPair().publicKey
+        )
 
-        return expect(resolve(encodeStacksV2Did({address: randomAddress, anchorTxId: mockTxId}))).rejectedWith('could not find transaction by ID')
+        return expect(
+          resolve(
+            encodeStacksV2Did({ address: randomAddress, anchorTxId: mockTxId })
+          )
+        ).rejectedWith("could not find transaction by ID")
       })
 
       it("fails to resolve if associated public key does not map to the name owner", async () => {
-        return expect(resolve(testDidInvalid.did)).rejectedWith('Token issuer public key does not match the verifying value')
+        return expect(resolve(testDidInvalid.did)).rejectedWith(
+          "Token issuer public key does not match the verifying value"
+        )
       })
     })
   })
