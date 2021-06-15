@@ -25,8 +25,12 @@ export const setup = async (
 ) => {
   try {
     await registerNamespace(namespace, network, keyPair)
-  } catch { 
-    console.log('Did not register', namespace, 'due to error, probably already registered')
+  } catch {
+    console.log(
+      "Did not register",
+      namespace,
+      "due to error, probably already registered"
+    )
   }
 
   await preorderAndRegisterName(name, namespace, network, keyPair)

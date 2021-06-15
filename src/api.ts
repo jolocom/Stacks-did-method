@@ -151,7 +151,7 @@ export const fetchNameInfoFromContract = ({
       const { value, success } = cvToJSON(result)
       if (!success) {
         return resolve({
-          zonefile_hash: '0'
+          zonefile_hash: "0",
         })
       }
 

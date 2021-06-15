@@ -5,7 +5,7 @@ import { range, flatten } from "ramda"
 import { buildDidDoc, encodeStacksV2Did } from "../src/utils/did"
 import { resolve } from "../src/"
 import {
-    preorderAndRegisterName,
+  preorderAndRegisterName,
   revokeName,
   rotateKey,
 } from "../src/registrar/index"
@@ -58,7 +58,7 @@ const INIT_NAMESPACE = true
 describe("did:stacks:v2 resolver", () => {
   let testNamespace = "testn"
   let testName = "testname"
-  let testSubdomainName = randomBytes(4).toString('hex')
+  let testSubdomainName = randomBytes(4).toString("hex")
   let testDid: string = ""
 
   before(async () => {
@@ -74,7 +74,12 @@ describe("did:stacks:v2 resolver", () => {
     }
 
     // Registering name for later Off-Chain DID registration and resolution tests
-    await preorderAndRegisterName(testSubdomainName, testNamespace, mockNet, subdomainRegistrarKeyPair)
+    await preorderAndRegisterName(
+      testSubdomainName,
+      testNamespace,
+      mockNet,
+      subdomainRegistrarKeyPair
+    )
   })
 
   describe("DID Resolution", () => {
@@ -83,8 +88,11 @@ describe("did:stacks:v2 resolver", () => {
         return expect(resolve(testDid)).to.eventually.deep.eq(
           buildDidDoc({
             did: testDid,
-            publicKey: getPublicKey(initialKeyPair.privateKey).data.toString("hex")
-          }))
+            publicKey: getPublicKey(initialKeyPair.privateKey).data.toString(
+              "hex"
+            ),
+          })
+        )
       })
 
       it("Should correctly resolve v2 DID after the key was rotated", async () => {
@@ -99,7 +107,9 @@ describe("did:stacks:v2 resolver", () => {
         return expect(resolve(testDid)).to.eventually.deep.eq(
           buildDidDoc({
             did: testDid,
-            publicKey: getPublicKey(rotatedKeyPair.privateKey).data.toString("hex")
+            publicKey: getPublicKey(rotatedKeyPair.privateKey).data.toString(
+              "hex"
+            ),
           })
         )
       })
@@ -168,7 +178,7 @@ describe("did:stacks:v2 resolver", () => {
         return expect(resolve(testDidValid.did)).to.eventually.deep.eq(
           buildDidDoc({
             did: testDidValid.did,
-            publicKey: compressedPublicKey.data.toString("hex")
+            publicKey: compressedPublicKey.data.toString("hex"),
           })
         )
       })

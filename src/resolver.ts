@@ -160,14 +160,14 @@ const postResolve = (name: string, did: string, initialPubKey: string) => {
   if (fqn.subdomain) {
     return fResolve({
       did,
-      publicKey: initialPubKey
+      publicKey: initialPubKey,
     })
   }
 
   return fetchNameInfo(fqn).pipe(
     chain((currentInfo) => {
       if (currentInfo.status === "name-revoke") {
-        return createRejectedFuture<Error, {did: string, publicKey: string}>(
+        return createRejectedFuture<Error, { did: string; publicKey: string }>(
           new Error("Name bound to DID was revoked")
         )
       }
@@ -175,22 +175,31 @@ const postResolve = (name: string, did: string, initialPubKey: string) => {
       return getCurrentBlockNumber().pipe(
         chain((currentBlock) => {
           if (currentInfo.expire_block > currentBlock) {
-            return createRejectedFuture<Error, {did: string, publicKey: string}>(
-              new Error("Name bound to DID expired")
-            )
+            return createRejectedFuture<
+              Error,
+              { did: string; publicKey: string }
+            >(new Error("Name bound to DID expired"))
           }
 
-         return getZonefileRecordsForName({...fqn, owner: currentInfo.address})(currentInfo.zonefile)
-           .flatMap(parseZoneFileAndExtractNameinfo(currentInfo.address))
-           .fold(reject, ({tokenUrl}) => fetchSignedToken(tokenUrl))
-           .pipe(
-             map(verifyTokenAndGetPubKey(normalizeAddress(currentInfo.address)))
-           ).pipe(chain(newInfo => newInfo
-                        .fold(() => 
-                              fResolve({did, publicKey: initialPubKey}), 
-                              (newKey) => fResolve({publicKey: newKey, did}))
-                       )
-                 )
+          return getZonefileRecordsForName({
+            ...fqn,
+            owner: currentInfo.address,
+          })(currentInfo.zonefile)
+            .flatMap(parseZoneFileAndExtractNameinfo(currentInfo.address))
+            .fold(reject, ({ tokenUrl }) => fetchSignedToken(tokenUrl))
+            .pipe(
+              map(
+                verifyTokenAndGetPubKey(normalizeAddress(currentInfo.address))
+              )
+            )
+            .pipe(
+              chain((newInfo) =>
+                newInfo.fold(
+                  () => fResolve({ did, publicKey: initialPubKey }),
+                  (newKey) => fResolve({ publicKey: newKey, did })
+                )
+              )
+            )
         })
       )
     })
@@ -204,11 +213,11 @@ export const resolve = (did: string) =>
         (isMigratedOnChainDid(parsedDID)
           ? getPublicKeyForMigratedDid(parsedDID)
           : getPublicKeyForDID(parsedDID)
-        )
-        .pipe(
+        ).pipe(
           chain(({ name, publicKey }) =>
             postResolve(name, did, publicKey).pipe(map(buildDidDoc))
           )
         )
-      ).fold(reject, identity)
+      )
+      .fold(reject, identity)
   )
