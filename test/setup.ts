@@ -23,7 +23,11 @@ export const setup = async (
   network: StacksNetwork,
   keyPair: StacksKeyPair
 ) => {
-  await registerNamespace(namespace, network, keyPair)
+  try {
+    await registerNamespace(namespace, network, keyPair)
+  } catch { 
+    console.log('Did not register', namespace, 'due to error, probably already registered')
+  }
 
   await preorderAndRegisterName(name, namespace, network, keyPair)
 

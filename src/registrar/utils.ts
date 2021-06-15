@@ -51,7 +51,6 @@ export const waitForConfirmation = (
 }
 
 export const wait = (ms: number): FutureInstance<never, void> => {
-  console.log(`wait for ${ms / 1000} sec`)
   return Future((_, res) => {
     const t = setTimeout(res, ms)
     return () => clearTimeout(t)

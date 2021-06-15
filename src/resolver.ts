@@ -151,29 +151,23 @@ const getPublicKeyForDID = (did: StacksV2DID) =>
     )
   )
 
-// For on-chain names -
-// 1. Name revoked
-// 2 name expired / not active?
-
-const ensureDidNotRevoked = ({
-  did,
-  name,
-}: {
-  name: string
-  did: string
-}): FutureInstance<Error, string> => {
+const postResolve = (name: string, did: string, initialPubKey: string) => {
   const fqn = decodeFQN(name)
 
   // TODO Can subdmains be revoked? How would we find out?
   // Current assumption is that we can not easily check for this
+  //
   if (fqn.subdomain) {
-    return fResolve(did)
+    return fResolve({
+      did,
+      publicKey: initialPubKey
+    })
   }
 
   return fetchNameInfo(fqn).pipe(
     chain((currentInfo) => {
       if (currentInfo.status === "name-revoke") {
-        return createRejectedFuture<Error, string>(
+        return createRejectedFuture<Error, {did: string, publicKey: string}>(
           new Error("Name bound to DID was revoked")
         )
       }
@@ -181,12 +175,22 @@ const ensureDidNotRevoked = ({
       return getCurrentBlockNumber().pipe(
         chain((currentBlock) => {
           if (currentInfo.expire_block > currentBlock) {
-            return createRejectedFuture<Error, string>(
+            return createRejectedFuture<Error, {did: string, publicKey: string}>(
               new Error("Name bound to DID expired")
             )
           }
 
-          return fResolve(did) as FutureInstance<Error, string>
+         return getZonefileRecordsForName({...fqn, owner: currentInfo.address})(currentInfo.zonefile)
+           .flatMap(parseZoneFileAndExtractNameinfo(currentInfo.address))
+           .fold(reject, ({tokenUrl}) => fetchSignedToken(tokenUrl))
+           .pipe(
+             map(verifyTokenAndGetPubKey(normalizeAddress(currentInfo.address)))
+           ).pipe(chain(newInfo => newInfo
+                        .fold(() => 
+                              fResolve({did, publicKey: initialPubKey}), 
+                              (newKey) => fResolve({publicKey: newKey, did}))
+                       )
+                 )
         })
       )
     })
@@ -200,13 +204,11 @@ export const resolve = (did: string) =>
         (isMigratedOnChainDid(parsedDID)
           ? getPublicKeyForMigratedDid(parsedDID)
           : getPublicKeyForDID(parsedDID)
-        ).pipe(
+        )
+        .pipe(
           chain(({ name, publicKey }) =>
-            ensureDidNotRevoked({ name, did }).pipe(
-              map((did) => buildDidDoc(did)(publicKey))
-            )
+            postResolve(name, did, publicKey).pipe(map(buildDidDoc))
           )
         )
-      )
-      .fold(reject, identity)
+      ).fold(reject, identity)
   )

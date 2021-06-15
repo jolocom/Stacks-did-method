@@ -133,6 +133,7 @@ export const fetchNameInfoFromContract = ({
   const [contractAddress, contractName] = BNS_ADDRESSES.test.split(".")
 
   const functionName = "name-resolve"
+  // TODO Use randomly generated addr every time?
   const senderAddress = "ST2F4BK4GZH6YFBNHYDDGN4T1RKBA7DA1BJZPJEJJ"
 
   const options = {
@@ -146,10 +147,12 @@ export const fetchNameInfoFromContract = ({
 
   //@ts-ignore
   return encaseP(callReadOnlyFunction)(options).pipe(
-    chain((v) => {
-      const { value, success } = cvToJSON(v)
+    chain((result) => {
+      const { value, success } = cvToJSON(result)
       if (!success) {
-        return reject("Failed to read name info from chain")
+        return resolve({
+          zonefile_hash: '0'
+        })
       }
 
       return resolve({

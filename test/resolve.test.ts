@@ -5,6 +5,7 @@ import { range, flatten } from "ramda"
 import { buildDidDoc, encodeStacksV2Did } from "../src/utils/did"
 import { resolve } from "../src/"
 import {
+    preorderAndRegisterName,
   revokeName,
   rotateKey,
 } from "../src/registrar/index"
@@ -45,16 +46,24 @@ const rotatedKeyPair = getKeyPair(
   )
 )
 
+const subdomainRegistrarKeyPair = getKeyPair(
+  Buffer.from(
+    "c71700b07d520a8c9731e4d0f095aa6efb91e16e25fb27ce2b72e7b698f8127a01",
+    "hex"
+  )
+)
+
 const INIT_NAMESPACE = true
 
 describe("did:stacks:v2 resolver", () => {
   let testNamespace = "testn"
   let testName = "testname"
-  let testDid: string =
-    "did:stacks:v2:STRYYQQ9M8KAF4NS7WNZQYY59X93XEKR31JP64CP-0x28f45561873326ddfb04d3af7e5388df793b28feea82c6fac78525d47746037f"
+  let testSubdomainName = randomBytes(4).toString('hex')
+  let testDid: string = ""
 
   before(async () => {
     if (INIT_NAMESPACE) {
+      // Registering name for On-Chain DID resolution tests
       const { did } = await setup(
         testName,
         testNamespace,
@@ -63,19 +72,22 @@ describe("did:stacks:v2 resolver", () => {
       )
       testDid = did
     }
+
+    // Registering name for later Off-Chain DID registration and resolution tests
+    await preorderAndRegisterName(testSubdomainName, testNamespace, mockNet, subdomainRegistrarKeyPair)
   })
 
   describe("DID Resolution", () => {
     describe("On-chain Stacks v2 DIDs", () => {
       it("correctly resolves newly created Stacks v2 DID", async () => {
         return expect(resolve(testDid)).to.eventually.deep.eq(
-          buildDidDoc(testDid)(
-            getPublicKey(initialKeyPair.privateKey).data.toString("hex")
-          )
-        )
+          buildDidDoc({
+            did: testDid,
+            publicKey: getPublicKey(initialKeyPair.privateKey).data.toString("hex")
+          }))
       })
 
-      it.skip("Should correctly resolve v2 DID after the key was rotated", async () => {
+      it("Should correctly resolve v2 DID after the key was rotated", async () => {
         await rotateKey(
           testName,
           testNamespace,
@@ -85,15 +97,16 @@ describe("did:stacks:v2 resolver", () => {
         )
 
         return expect(resolve(testDid)).to.eventually.deep.eq(
-          buildDidDoc(testDid)(
-            getPublicKey(initialKeyPair.privateKey).data.toString("hex")
-          )
+          buildDidDoc({
+            did: testDid,
+            publicKey: getPublicKey(rotatedKeyPair.privateKey).data.toString("hex")
+          })
         )
       })
 
-      it.skip("Should fail to resolve v2 DID after name was revoked", async () => {
+      it("Should fail to resolve v2 DID after name was revoked", async () => {
         const testFqn = encodeFQN({ name: testName, namespace: testNamespace })
-        await revokeName(testFqn, initialKeyPair, mockNet)
+        await revokeName(testFqn, rotatedKeyPair, mockNet)
         return expect(resolve(testDid)).rejectedWith(
           "Name bound to DID was revoked"
         )
@@ -136,10 +149,10 @@ describe("did:stacks:v2 resolver", () => {
       before(async () => {
         const { invalidDid, validDid } = await setupSubdomains(
           encodeFQN({
-            name: testName,
+            name: testSubdomainName,
             namespace: testNamespace,
           }),
-          initialKeyPair,
+          subdomainRegistrarKeyPair,
           mockNet
         )
 
@@ -153,9 +166,10 @@ describe("did:stacks:v2 resolver", () => {
         )
 
         return expect(resolve(testDidValid.did)).to.eventually.deep.eq(
-          buildDidDoc(testDidValid.did)(
-            compressedPublicKey.data.toString("hex")
-          )
+          buildDidDoc({
+            did: testDidValid.did,
+            publicKey: compressedPublicKey.data.toString("hex")
+          })
         )
       })
 
