@@ -1,14 +1,14 @@
 import {
   makeRandomPrivKey,
   getPublicKey,
-  getAddressFromPublicKey,
-  TransactionVersion,
   StacksPrivateKey,
   StacksPublicKey,
   createStacksPrivateKey,
+  isCompressed,
+  compressPublicKey,
 } from "@stacks/transactions"
-import "isomorphic-fetch"
-import { encaseP, map } from "fluture"
+import { fetchTransactionById } from "../api"
+import Future, { chain, resolve, reject, FutureInstance } from "fluture"
 
 export type StacksKeyPair = {
   privateKey: StacksPrivateKey
@@ -19,38 +19,40 @@ export const getKeyPair = (privateKey?: string | Buffer): StacksKeyPair => {
   const priv = privateKey
     ? createStacksPrivateKey(privateKey)
     : makeRandomPrivKey()
+
   const publicKey = getPublicKey(priv)
   return {
     privateKey: priv,
-    publicKey,
+    publicKey: isCompressed(publicKey)
+      ? publicKey
+      : compressPublicKey(publicKey.data),
   }
 }
 
-const fuelAddress = (address: string) => {
-  const endpoint =
-    "https://stacks-node-api.testnet.stacks.co/extended/v1/faucets/stx?address="
-  const request = new Request(`${endpoint}${address}`, {
-    method: "POST",
-  })
+export const waitForConfirmation = (
+  txId: string,
+  delay: number = 3000
+): FutureInstance<Error, {}> => {
+  return wait(delay)
+    .pipe(chain(() => fetchTransactionById(txId)))
+    .pipe(
+      chain((tx) => {
+        if (tx.tx_status === "pending") {
+          return waitForConfirmation(txId)
+        }
 
-  return encaseP(fetch)(request).pipe(map((res) => res.ok))
+        if (tx.tx_status === "success") {
+          return resolve(tx)
+        }
+
+        return reject(new Error(`Tx failed, ${tx.tx_status} ${txId}`))
+      })
+    )
 }
 
-export const getFueledKeyPair = () => {
-  const { privateKey, publicKey } = getKeyPair()
-  const addr = getAddressFromPublicKey(
-    publicKey.data,
-    TransactionVersion.Testnet
-  )
-
-  return fuelAddress(addr).pipe(
-    map(
-      (ok) =>
-        ok && {
-          privateKey,
-          publicKey,
-          address: addr,
-        }
-    )
-  )
+export const wait = (ms: number): FutureInstance<never, void> => {
+  return Future((_, res) => {
+    const t = setTimeout(res, ms)
+    return () => clearTimeout(t)
+  })
 }

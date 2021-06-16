@@ -6,7 +6,6 @@
     "lib": ["es2017", "dom"],
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "esModuleInterop": true,
     "strict": true,
     "strictNullChecks": true,
     "sourceMap": true,

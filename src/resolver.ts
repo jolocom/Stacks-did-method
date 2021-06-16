@@ -1,22 +1,20 @@
-import { c32ToB58 } from "c32check"
 import { identity } from "ramda"
+import { parseAndValidateTransaction } from "./utils/transactions"
+import { verifyTokenAndGetPubKey } from "./utils/signedToken"
 import {
-  parseAndValidateTransaction,
-  extractContractCallArgs,
-} from "./utils/transactions"
-import {
-  verifyTokenAndGetPubKey,
-  extractTokenFileUrl,
-} from "./utils/signedToken"
-import { decodeFQN } from "./utils/general"
+  createRejectedFuture,
+  decodeFQN,
+  encodeFQN,
+  normalizeAddress,
+} from "./utils/general"
 import {
   parseStacksV2DID,
   buildDidDoc,
   isMigratedOnChainDid,
 } from "./utils/did"
 import {
-  parseZoneFileAndExtractTokenUrl,
-  getRecordsForName,
+  getZonefileRecordsForName,
+  parseZoneFileAndExtractNameinfo,
 } from "./utils/zonefile"
 import { StacksV2DID } from "./types"
 
@@ -26,6 +24,7 @@ import {
   fetchZoneFileForName,
   fetchTransactionById,
   fetchSignedToken,
+  getCurrentBlockNumber,
 } from "./api"
 import {
   chain,
@@ -33,21 +32,22 @@ import {
   reject,
   resolve as fResolve,
   FutureInstance,
+  promise,
 } from "fluture"
-import { Left, Either } from "monet"
 
-const getPublicKeyForMigratedDid = ({
-  address,
-  anchorTxId,
-}: StacksV2DID): FutureInstance<Error, string> =>
+const getPublicKeyForMigratedDid = ({ address, anchorTxId }: StacksV2DID) =>
   fetchNamesOwnedByAddress(address)
     .pipe(map((names) => names[0]))
     .pipe(map(decodeFQN))
     .pipe(chain(fetchNameInfo))
     .pipe(
-      map((nameInfo): Either<Error, string> => {
-        if (nameInfo.last_txid !== "0x") {
-          return Left(
+      chain((nameInfo) => {
+        if (
+          nameInfo.last_txid === "0x" &&
+          nameInfo.status !== "name-register"
+        ) {
+          // TODO What if a migrated name has since been updated? How do we handle this case?
+          return reject(
             new Error(
               `Verifying name-record for migrated DID failed, expected last_txid to be 0x, got ${anchorTxId}`
             )
@@ -55,97 +55,169 @@ const getPublicKeyForMigratedDid = ({
         }
 
         if (nameInfo.address !== address) {
-          return Left(
+          return reject(
             new Error(
               `Verifying name-record failed, expected name owner to match address, got ${address}`
             )
           )
         }
 
-        return parseZoneFileAndExtractTokenUrl(nameInfo.zonefile, address)
+        return parseZoneFileAndExtractNameinfo(address)(nameInfo.zonefile)
+          .map((nameInfo) =>
+            fetchSignedToken(nameInfo.tokenUrl)
+              .pipe(
+                map(verifyTokenAndGetPubKey(normalizeAddress(nameInfo.owner)))
+              )
+              .pipe(
+                map((key) =>
+                  key.map((k) => ({
+                    name: encodeFQN(nameInfo),
+                    publicKey: k,
+                  }))
+                )
+              )
+              .pipe(
+                chain((e) =>
+                  e.fold(
+                    reject,
+                    (v) =>
+                      fResolve(v) as FutureInstance<
+                        Error,
+                        { name: string; publicKey: string }
+                      >
+                  )
+                )
+              )
+          )
+          .fold(reject, identity)
       })
     )
-    .pipe(chain((result) => result.fold(reject, fetchSignedToken)))
-    .pipe(map(verifyTokenAndGetPubKey(c32ToB58(address))))
-    .pipe(
-      chain((either) =>
-        either.fold<FutureInstance<Error, string>>(reject, fResolve)
-      )
-    )
 
-const getPublicKeyForDID = (did: StacksV2DID): FutureInstance<Error, string> =>
-  fetchTransactionById(did.anchorTxId)
-    .pipe(map(parseAndValidateTransaction))
-    .pipe(map((tx) => tx.chain(extractContractCallArgs)))
-    .pipe(
-      chain((result) =>
-        result.fold(reject, (callArgs) =>
-          fetchZoneFileForName(callArgs)
+const getPublicKeyForDID = (did: StacksV2DID) =>
+  fetchTransactionById(did.anchorTxId).pipe(
+    chain((tx) =>
+      parseAndValidateTransaction(tx)
+        .map(({ name, namespace, zonefileHash }) =>
+          fetchZoneFileForName({ name, namespace, zonefileHash })
             .pipe(
               map(
-                getRecordsForName({
-                  ...callArgs,
+                getZonefileRecordsForName({
                   owner: did.address,
+                  name,
+                  namespace,
                 })
               )
             )
             .pipe(
-              chain((zonefile) =>
-                zonefile
-                  .flatMap(extractTokenFileUrl)
-                  .fold(reject, fetchSignedToken)
+              map((zf) =>
+                zf.flatMap(parseZoneFileAndExtractNameinfo(did.address))
               )
             )
+            .pipe(
+              map((zf) =>
+                zf.map(({ tokenUrl, namespace, name, subdomain }) =>
+                  fetchSignedToken(tokenUrl)
+                    .pipe(
+                      map(
+                        verifyTokenAndGetPubKey(normalizeAddress(did.address))
+                      )
+                    )
+                    .pipe(
+                      map((key) =>
+                        key.map((k) => ({
+                          name: encodeFQN({ name, namespace, subdomain }),
+                          publicKey: k,
+                        }))
+                      )
+                    )
+                )
+              )
+            )
+            .pipe(chain((p) => p.fold(reject, identity)))
         )
-      )
+        .fold(reject, identity)
+        .pipe(
+          chain((res) =>
+            res.fold(
+              reject,
+              (v) =>
+                fResolve(v) as FutureInstance<
+                  Error,
+                  { name: string; publicKey: string }
+                >
+            )
+          )
+        )
     )
-    .pipe(map(verifyTokenAndGetPubKey(c32ToB58(did.address))))
-    .pipe(
-      chain((either) =>
-        either.fold<FutureInstance<Error, string>>(reject, fResolve)
+  )
+
+const postResolve = (name: string, did: string, initialPubKey: string) => {
+  const fqn = decodeFQN(name)
+
+  // TODO Can subdmains be revoked? How would we find out?
+  // Current assumption is that we can not easily check for this
+  //
+  if (fqn.subdomain) {
+    return fResolve({
+      did,
+      publicKey: initialPubKey,
+    })
+  }
+
+  return fetchNameInfo(fqn).pipe(
+    chain((currentInfo) => {
+      if (currentInfo.status === "name-revoke") {
+        return createRejectedFuture<Error, { did: string; publicKey: string }>(
+          new Error("Name bound to DID was revoked")
+        )
+      }
+
+      return getCurrentBlockNumber().pipe(
+        chain((currentBlock) => {
+          if (currentInfo.expire_block > currentBlock) {
+            return createRejectedFuture<
+              Error,
+              { did: string; publicKey: string }
+            >(new Error("Name bound to DID expired"))
+          }
+
+          return getZonefileRecordsForName({
+            ...fqn,
+            owner: currentInfo.address,
+          })(currentInfo.zonefile)
+            .flatMap(parseZoneFileAndExtractNameinfo(currentInfo.address))
+            .fold(reject, ({ tokenUrl }) => fetchSignedToken(tokenUrl))
+            .pipe(
+              map(
+                verifyTokenAndGetPubKey(normalizeAddress(currentInfo.address))
+              )
+            )
+            .pipe(
+              chain((newInfo) =>
+                newInfo.fold(
+                  () => fResolve({ did, publicKey: initialPubKey }),
+                  (newKey) => fResolve({ publicKey: newKey, did })
+                )
+              )
+            )
+        })
       )
-    )
+    })
+  )
+}
 
 export const resolve = (did: string) =>
-  parseStacksV2DID(did)
-    .map((parsedDID) =>
-      (isMigratedOnChainDid(parsedDID)
-        ? getPublicKeyForMigratedDid(parsedDID)
-        : getPublicKeyForDID(parsedDID)
-      ).pipe(map(buildDidDoc(did)))
-    )
-    .fold(reject, identity)
-
-// Does the address still own the name assigned to it at registration?
-// Ensures that the key has not been changed as well
-// TODO May have to account for key rotation
-// export const isDidStillActive = (
-//   { name, subdomain, ownerAddress, namespace, publicKeyHex }: NameRecord,
-//   currentZoneFile: string
-// ) => {
-//   const parsedZoneFile = parseZoneFile(currentZoneFile)
-//
-//   if (!parsedZoneFile) {
-//     return Left(
-//       new Error(
-//         `Failed to parse current zonefile, received content - ${currentZoneFile}`
-//       )
-//     )
-//   }
-//
-//   return getRecordsForName(
-//     {
-//       name,
-//       namespace,
-//       subdomain,
-//       owner: ownerAddress,
-//     },
-//     currentZoneFile
-//   )
-//     .map(parseZoneFile)
-//     .map(extractTokenFileUrl)
-//     .cata(reject, fetchSignedToken)
-//     .pipe(chain(fetchSignedToken))
-//     .pipe(chain(curry(flip(verifyProfileToken))(ownerAddress)))
-//     .pipe(map((v) => v["payload"]["subject"].publicKey === publicKeyHex))
-// }
+  promise(
+    parseStacksV2DID(did)
+      .map((parsedDID) =>
+        (isMigratedOnChainDid(parsedDID)
+          ? getPublicKeyForMigratedDid(parsedDID)
+          : getPublicKeyForDID(parsedDID)
+        ).pipe(
+          chain(({ name, publicKey }) =>
+            postResolve(name, did, publicKey).pipe(map(buildDidDoc))
+          )
+        )
+      )
+      .fold(reject, identity)
+  )

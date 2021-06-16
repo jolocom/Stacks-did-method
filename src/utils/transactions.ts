@@ -1,5 +1,5 @@
 import { compose } from "ramda"
-import { hexToCV, cvToValue } from "@stacks/transactions"
+import { hexToCV, cvToValue, StacksTransaction } from "@stacks/transactions"
 import { hexToAscii, stripHexPrefixIfPresent } from "./general"
 
 import {
@@ -12,18 +12,36 @@ import {
 import { BNS_ADDRESSES } from "../constants"
 import { Left, Right, Either } from "monet"
 
+//TODO Find type for tx json
 export const parseAndValidateTransaction = (
-  txData: any
-): Either<Error, string[]> => {
-  // TODO Include name-import
-  const allowedFunctionNames = ["name-register", "name-update"]
-  const contractCallData = txData["contract_call"]
+  tx: any
+): Either<
+  Error,
+  {
+    name: string
+    namespace: string
+    zonefileHash: string
+  }
+> => {
+  const allowedFunctionNames = [
+    "name-register",
+    "name-import",
+    "name-update",
+    "name-renewal",
+  ]
+
+  if (tx.tx_status !== "success") {
+    return Left(
+      new Error(`Invalid TX status for ${tx.tx_id}, expected success`)
+    )
+  }
+  const contractCallData = tx.contract_call
 
   if (!contractCallData) {
     return Left(new Error("resolve failed, no contract_call in fetched tx"))
   }
 
-  if (!Object.values(BNS_ADDRESSES).includes(contractCallData["contract_id"])) {
+  if (!Object.values(BNS_ADDRESSES).includes(contractCallData.contract_id)) {
     return Left(
       new Error(
         "Must reference TX to the BNS contract address, mainnet or testnet"
@@ -41,7 +59,7 @@ export const parseAndValidateTransaction = (
     )
   }
 
-  return Right(contractCallData["function_args"])
+  return extractContractCallArgs(contractCallData.function_args)
 }
 
 /**
@@ -49,7 +67,7 @@ export const parseAndValidateTransaction = (
  * @returns nameInfo - the name, namespace, and zonefile-hash encoded in the TX
  */
 
-export const extractContractCallArgs = (
+const extractContractCallArgs = (
   functionArgs: Array<any>
 ): Either<Error, { name: string; namespace: string; zonefileHash: string }> => {
   const relevantArguments = ["name", "namespace", "zonefile-hash"]
@@ -78,12 +96,15 @@ export const extractContractCallArgs = (
   }
 
   const hexEncodedValues = [name, namespace, zonefileHash].map(
-    compose(stripHexPrefixIfPresent, cvToValue, hexToCV)
+    compose(cvToValue, hexToCV, stripHexPrefixIfPresent)
   )
 
   return Right({
     name: hexToAscii(hexEncodedValues[0]),
     namespace: hexToAscii(hexEncodedValues[1]),
-    zonefileHash: hexEncodedValues[2],
+    zonefileHash:
+      typeof hexEncodedValues[2] === "string"
+        ? stripHexPrefixIfPresent(hexEncodedValues[2])
+        : stripHexPrefixIfPresent(hexEncodedValues[2].value),
   })
 }
