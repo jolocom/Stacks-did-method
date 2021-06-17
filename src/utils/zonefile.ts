@@ -1,7 +1,8 @@
-import { extractTokenFileUrl } from "./signedToken"
-import { decodeFQN, encodeFQN, normalizeAddress } from "./general"
+import { extractTokenFileUrl, fetchAndVerifySignedToken } from "./signedToken"
+import { decodeFQN, eitherToFuture, encodeFQN, normalizeAddress } from "./general"
 import "isomorphic-fetch"
-import { Some, None, Maybe, Right, Left, Either } from "monet"
+import { Right, Left, Either } from "monet"
+import { chain } from "fluture"
 const { parseZoneFile } = require("zone-file")
 const b58 = require("bs58")
 
@@ -115,3 +116,8 @@ export const parseZoneFileAndExtractTokenUrl = (
     subdomain,
   }).flatMap(extractTokenFileUrl)
 }
+
+export const getPublicKeyUsingZoneFile = (zf: string, ownerAddress: string) =>
+  eitherToFuture(parseZoneFileAndExtractNameinfo(zf))
+    .pipe(chain(({tokenUrl}) => fetchAndVerifySignedToken(tokenUrl, ownerAddress)))
+
