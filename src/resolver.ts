@@ -4,8 +4,9 @@ import { verifyTokenAndGetPubKey } from "./utils/signedToken"
 import {
   createRejectedFuture,
   decodeFQN,
-  encodeFQN,
+  eitherToFuture,
   normalizeAddress,
+  encodeFQN,
 } from "./utils/general"
 import {
   parseStacksV2DID,
@@ -13,7 +14,8 @@ import {
   isMigratedOnChainDid,
 } from "./utils/did"
 import {
-  getZonefileRecordsForName,
+  ensureZonefileMatchesName,
+  findSubdomainZonefile,
   parseZoneFileAndExtractNameinfo,
 } from "./utils/zonefile"
 import { StacksV2DID } from "./types"
@@ -34,10 +36,11 @@ import {
   FutureInstance,
   promise,
 } from "fluture"
+import { Right } from "monet"
 
 const getPublicKeyForMigratedDid = ({ address, anchorTxId }: StacksV2DID) =>
   fetchNamesOwnedByAddress(address)
-    .pipe(map((names) => names[0]))
+    .pipe(map((names) => names[0])) // One principal can only map to one on-chain name, therefore we don't expect to receive multiple results here
     .pipe(map(decodeFQN))
     .pipe(chain(fetchNameInfo))
     .pipe(
@@ -62,96 +65,95 @@ const getPublicKeyForMigratedDid = ({ address, anchorTxId }: StacksV2DID) =>
           )
         }
 
-        return parseZoneFileAndExtractNameinfo(address)(nameInfo.zonefile)
-          .map((nameInfo) =>
-            fetchSignedToken(nameInfo.tokenUrl)
+        return parseZoneFileAndExtractNameinfo(nameInfo.zonefile)
+          .map(({ tokenUrl, name, namespace, subdomain }) =>
+            fetchSignedToken(tokenUrl)
               .pipe(
-                map(verifyTokenAndGetPubKey(normalizeAddress(nameInfo.owner)))
+                map(verifyTokenAndGetPubKey(normalizeAddress(nameInfo.address)))
               )
               .pipe(
                 map((key) =>
                   key.map((k) => ({
-                    name: encodeFQN(nameInfo),
+                    name: encodeFQN({
+                      name,
+                      namespace,
+                      subdomain,
+                    }),
                     publicKey: k,
                   }))
                 )
               )
-              .pipe(
-                chain((e) =>
-                  e.fold(
-                    reject,
-                    (v) =>
-                      fResolve(v) as FutureInstance<
-                        Error,
-                        { name: string; publicKey: string }
-                      >
-                  )
-                )
-              )
+              .pipe(chain(eitherToFuture))
           )
           .fold(reject, identity)
       })
     )
 
-const getPublicKeyForDID = (did: StacksV2DID) =>
-  fetchTransactionById(did.anchorTxId).pipe(
-    chain((tx) =>
-      parseAndValidateTransaction(tx)
-        .map(({ name, namespace, zonefileHash }) =>
-          fetchZoneFileForName({ name, namespace, zonefileHash })
-            .pipe(
-              map(
-                getZonefileRecordsForName({
-                  owner: did.address,
-                  name,
-                  namespace,
-                })
-              )
-            )
-            .pipe(
-              map((zf) =>
-                zf.flatMap(parseZoneFileAndExtractNameinfo(did.address))
-              )
-            )
-            .pipe(
-              map((zf) =>
-                zf.map(({ tokenUrl, namespace, name, subdomain }) =>
-                  fetchSignedToken(tokenUrl)
-                    .pipe(
-                      map(
-                        verifyTokenAndGetPubKey(normalizeAddress(did.address))
-                      )
-                    )
-                    .pipe(
-                      map((key) =>
-                        key.map((k) => ({
-                          name: encodeFQN({ name, namespace, subdomain }),
-                          publicKey: k,
-                        }))
-                      )
-                    )
-                )
-              )
-            )
-            .pipe(chain((p) => p.fold(reject, identity)))
-        )
-        .fold(reject, identity)
+const getPublicKeyForDID = (
+  did: StacksV2DID
+): FutureInstance<Error, { publicKey: string; name: string }> =>
+  //@ts-ignore Typing issue with Left, not recognised as Error.
+  mapDidToBNSName(did).pipe(
+    chain(({ name, namespace, subdomain, tokenUrl }) =>
+      fetchSignedToken(tokenUrl)
+        .pipe(map(verifyTokenAndGetPubKey(normalizeAddress(did.address))))
         .pipe(
-          chain((res) =>
-            res.fold(
-              reject,
-              (v) =>
-                fResolve(v) as FutureInstance<
-                  Error,
-                  { name: string; publicKey: string }
-                >
+          chain((key) =>
+            eitherToFuture(
+              key.map((publicKey) => ({
+                publicKey,
+                name: encodeFQN({ name, namespace, subdomain }),
+              }))
             )
           )
         )
     )
   )
 
-const postResolve = (name: string, did: string, initialPubKey: string) => {
+const mapDidToBNSName = (did: StacksV2DID) =>
+  getZonefileForDid(did)
+    .pipe(map(parseZoneFileAndExtractNameinfo))
+    .pipe(chain(eitherToFuture))
+
+const getZonefileForDid = (did: StacksV2DID) =>
+  fetchTransactionById(did.anchorTxId)
+    .pipe(map(parseAndValidateTransaction))
+    .pipe(chain(eitherToFuture))
+    .pipe(
+      chain(({ subdomainInception, ...nameInfo }) =>
+        fetchZoneFileForName(nameInfo)
+          .pipe(
+            map((zonefile) =>
+              subdomainInception
+                ? findSubdomainZonefile(zonefile, did.address)
+                : Right({
+                    zonefile,
+                    subdomain: undefined,
+                  } as { subdomain?: string; zonefile: string })
+            )
+          )
+          .pipe(
+            chain((relevantZf) =>
+              eitherToFuture(
+                relevantZf.flatMap(({ subdomain, zonefile }) =>
+                  ensureZonefileMatchesName({
+                    name: nameInfo.name,
+                    namespace: nameInfo.namespace,
+                    subdomain,
+                    zonefile,
+                  })
+                )
+              )
+            )
+          )
+      )
+    )
+
+const postResolve = (
+  name: string,
+  did: string,
+  initialPubKey: string
+): FutureInstance<Error, { did: string; publicKey: string }> => {
   const fqn = decodeFQN(name)
 
   // TODO Can subdmains be revoked? How would we find out?
@@ -181,11 +183,12 @@ const postResolve = (name: string, did: string, initialPubKey: string) => {
             >(new Error("Name bound to DID expired"))
           }
 
-          return getZonefileRecordsForName({
-            ...fqn,
-            owner: currentInfo.address,
-          })(currentInfo.zonefile)
-            .flatMap(parseZoneFileAndExtractNameinfo(currentInfo.address))
+          return ensureZonefileMatchesName({
+            zonefile: currentInfo.zonefile,
+            name: fqn.name,
+            namespace: fqn.namespace,
+          })
+            .flatMap(parseZoneFileAndExtractNameinfo)
             .fold(reject, ({ tokenUrl }) => fetchSignedToken(tokenUrl))
             .pipe(
               map(

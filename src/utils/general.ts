@@ -1,5 +1,6 @@
 import { c32addressDecode, c32address, c32ToB58 } from "c32check/lib/address"
-import { FutureInstance, reject } from "fluture"
+import { FutureInstance, reject, resolve } from "fluture"
+import { Either } from "monet"
 
 export const stripHexPrefixIfPresent = (data: string) => {
   if (data.startsWith("0x")) return data.substr(2)
@@ -64,4 +65,10 @@ export const createRejectedFuture = <R, F>(
   rejectWith: R
 ): FutureInstance<R, F> => {
   return reject(rejectWith) as FutureInstance<R, F>
+}
+
+export const eitherToFuture = <L, R>(
+  either: Either<L, R>
+): FutureInstance<L, R> => {
+  return either.fold((v) => createRejectedFuture<L, R>(v), resolve)
 }
