@@ -7,25 +7,15 @@ import {
   chain,
   reject,
   FutureInstance,
-  fork,
 } from "fluture"
 import { encodeFQN, stripHexPrefixIfPresent } from "./utils/general"
 import { BNS_ADDRESSES } from "./constants"
 import {
-  addressToString,
   bufferCVFromString,
   callReadOnlyFunction,
-  ClarityAbiTypeTuple,
   cvToJSON,
-  hexToCV,
-  parseToCV,
-  ReadOnlyFunctionOptions,
-  serializeCV,
-  TupleCV,
-  tupleCV,
 } from "@stacks/transactions"
 import { StacksMocknet, StacksNetwork } from "@stacks/network"
-import { principalCV } from "@stacks/transactions/dist/clarity/types/principalCV"
 
 const HOST = "http://localhost:3999"
 // const HOST = 'https://stacks-node-api.mainnet.stacks.co'
