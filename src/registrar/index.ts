@@ -361,47 +361,50 @@ export const registerSubdomain = async (
   network: StacksNetwork
 ) => {
   const { name, namespace, subdomain } = decodeFQN(fqn)
+  console.log("REGISTERING NAME", fqn)
 
   if (!subdomain) {
     throw new Error("provided fqn must include subdomain")
   }
 
-  const currentZf = await promise(
-    fetchZoneFileForName({
-      name,
-      namespace,
-    })
+  const parsedCurrentZF = parseZoneFile(
+    await promise(
+      fetchZoneFileForName({
+        name,
+        namespace,
+      })
+    )
   )
 
-  const parsed = parseZoneFile(currentZf)
+  const owner =
+    subdomainOptions.owner ||
+    publicKeyToAddress(
+      AddressVersion.TestnetSingleSig,
+      getPublicKey(subdomainOptions.ownerKeyPair.privateKey)
+    )
 
   const subdomainZoneFile = await buildSubdomainZoneFile(
     fqn,
     subdomainOptions.ownerKeyPair
   )
 
-  const address = publicKeyToAddress(
-    AddressVersion.TestnetSingleSig,
-    getPublicKey(subdomainOptions.ownerKeyPair.privateKey)
-  )
-  const owner = subdomainOptions.owner || address
-
   const newSubdomainOp = subdomainOpToZFPieces(
     subdomainZoneFile,
     normalizeAddress(owner),
     subdomain
   )
-  if (parsed?.txt?.length) {
-    parsed.txt.push(newSubdomainOp)
+
+  if (parsedCurrentZF?.txt?.length) {
+    parsedCurrentZF.txt.push(newSubdomainOp)
   } else {
-    parsed.txt = [newSubdomainOp]
+    parsedCurrentZF.txt = [newSubdomainOp]
   }
 
   const ZONEFILE_TEMPLATE = "{$origin}\n{$ttl}\n{txt}{uri}"
 
   const txId = await updateName(
     encodeFQN({ name, namespace }),
-    makeZoneFile(parsed, ZONEFILE_TEMPLATE),
+    makeZoneFile(parsedCurrentZF, ZONEFILE_TEMPLATE),
     nameOwnerKey,
     network
   )
@@ -412,7 +415,76 @@ export const registerSubdomain = async (
   })
 }
 
-const buildSubdomainZoneFile = async (fqn: string, keyPair: StacksKeyPair) => {
+export const revokeSubdomain = async (
+  fqn: string,
+  nameOwnerKey: StacksKeyPair,
+  subdomainOptions: {
+    owner?: string
+    ownerKeyPair: StacksKeyPair
+  },
+  network: StacksNetwork
+) => {
+  const { name, namespace, subdomain } = decodeFQN(fqn)
+  console.log(`REVOKING NAME - ${fqn}`)
+
+  if (!subdomain) {
+    throw new Error("provided fqn must include subdomain")
+  }
+
+  const currentZf = parseZoneFile(
+    await promise(
+      fetchZoneFileForName({
+        name,
+        namespace,
+      })
+    )
+  )
+
+  const revokedSubdomainZoneFile = await buildSubdomainZoneFile(
+    fqn,
+    subdomainOptions.ownerKeyPair,
+    "http://was.revoked"
+  )
+
+  const newSubdomainOp = subdomainOpToZFPieces(
+    revokedSubdomainZoneFile,
+    "1111111111111111111114oLvT2",
+    subdomain,
+    1
+  )
+
+  if (currentZf?.txt?.length) {
+    const idx = currentZf.txt.findIndex(
+      (record: any) => record.name === subdomain
+    )
+    currentZf.txt[idx] = newSubdomainOp
+  } else {
+    currentZf.txt = [newSubdomainOp]
+  }
+
+  const ZONEFILE_TEMPLATE = "{$origin}\n{$ttl}\n{txt}{uri}"
+
+  const txId = await updateName(
+    encodeFQN({ name, namespace }),
+    makeZoneFile(currentZf, ZONEFILE_TEMPLATE),
+    nameOwnerKey,
+    network
+  )
+
+  return encodeStacksV2Did({
+    anchorTxId: txId as string,
+    address: publicKeyToAddress(
+      AddressVersion.TestnetSingleSig,
+      getPublicKey(subdomainOptions.ownerKeyPair.privateKey)
+    ),
+  })
+}
+
+const buildSubdomainZoneFile = async (
+  fqn: string,
+  keyPair: StacksKeyPair,
+  signedTokenUrl?: string
+) => {
   const signedToken = signProfileToken(
     new Profile(),
     keyPair.privateKey.data.toString("hex")
@@ -420,7 +492,7 @@ const buildSubdomainZoneFile = async (fqn: string, keyPair: StacksKeyPair) => {
 
   const zf = makeProfileZoneFile(
     fqn,
-    await storeTokenFile(wrapProfileToken(signedToken))
+    signedTokenUrl || (await storeTokenFile(wrapProfileToken(signedToken)))
   )
 
   return zf
@@ -430,10 +502,15 @@ function subdomainOpToZFPieces(
   zonefile: string,
   owner: string,
   subdomainName: string,
+  seqn = 0,
   signature?: string
 ) {
   const destructedZonefile = destructZonefile(zonefile)
-  const txt = [`owner=${owner}`, `seqn=0`, `parts=${destructedZonefile.length}`]
+  const txt = [
+    `owner=${owner}`,
+    `seqn=${seqn}`,
+    `parts=${destructedZonefile.length}`,
+  ]
   destructedZonefile.forEach((zfPart, ix) => txt.push(`zf${ix}=${zfPart}`))
 
   if (signature) {

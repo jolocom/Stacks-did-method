@@ -3,6 +3,7 @@ import { fetchAndVerifySignedToken } from "./utils/signedToken"
 import {
   createRejectedFuture,
   decodeFQN,
+  eitherToFuture,
   encodeFQN,
 } from "./utils/general"
 import {
@@ -12,24 +13,25 @@ import {
 } from "./utils/did"
 import {
   ensureZonefileMatchesName,
-  parseZoneFileAndExtractNameinfo
+  findSubdomainZoneFileByName,
+  parseZoneFileAndExtractNameinfo,
 } from "./utils/zonefile"
 import { StacksV2DID } from "./types"
 
-import {
-  fetchNameInfo,
-  getCurrentBlockNumber,
-} from "./api"
+import { fetchNameInfo, getCurrentBlockNumber } from "./api"
 import {
   chain,
   map,
-  reject,
   resolve as fResolve,
   FutureInstance,
   promise,
+  chainRej,
+  mapRej,
 } from "fluture"
 import { getPublicKeyForMigratedDid } from "./migrated"
 import { mapDidToBNSName } from "./utils/bns"
+import { Either, Right } from "monet"
+import { DIDDocument } from "did-resolver"
 
 const getPublicKeyForDID = (
   did: StacksV2DID
@@ -37,33 +39,20 @@ const getPublicKeyForDID = (
   //@ts-ignore Left is typed as unknown
   mapDidToBNSName(did).pipe(
     chain(({ name, namespace, subdomain, tokenUrl }) =>
-      fetchAndVerifySignedToken(tokenUrl, did.address)
-        .pipe(
-          map(key => ({
-            publicKey: key,
-            name: encodeFQN({ name, namespace, subdomain }),
-          }))
-        )
+      fetchAndVerifySignedToken(tokenUrl, did.address).pipe(
+        map((key) => ({
+          publicKey: key,
+          name: encodeFQN({ name, namespace, subdomain }),
+        }))
+      )
     )
   )
 
-
 const postResolve = (
   name: string,
-  did: string,
-  initialPubKey: string
+  did: string
 ): FutureInstance<Error, { did: string; publicKey: string }> => {
   const fqn = decodeFQN(name)
-
-  // TODO Can subdmains be revoked? How would we find out?
-  // Current assumption is that we can not easily check for this
-  //
-  if (fqn.subdomain) {
-    return fResolve({
-      did,
-      publicKey: initialPubKey,
-    })
-  }
 
   return fetchNameInfo(fqn).pipe(
     chain((currentInfo) => {
@@ -73,28 +62,60 @@ const postResolve = (
         )
       }
 
-      return getCurrentBlockNumber().pipe(
-        chain((currentBlock) => {
-          if (currentInfo.expire_block > currentBlock) {
-            return createRejectedFuture<
-              Error,
-              { did: string; publicKey: string }
-            >(new Error("Name bound to DID expired"))
-          }
-
-          return ensureZonefileMatchesName({
-            zonefile: currentInfo.zonefile,
-            name: fqn.name,
-            namespace: fqn.namespace,
+      return getCurrentBlockNumber()
+        .pipe(
+          chain((currentBlock) => {
+            if (currentInfo.expire_block > currentBlock) {
+              return createRejectedFuture<Error, boolean>(
+                new Error("Name bound to DID expired")
+              )
+            }
+            return fResolve(true)
           })
-            .flatMap(parseZoneFileAndExtractNameinfo)
-            .fold(reject, ({ tokenUrl }) => fetchAndVerifySignedToken(tokenUrl, currentInfo.address))
-            .pipe(map( newKey  => ({
-                publicKey: newKey, did
-              }))
+        )
+        .pipe(
+          map(() =>
+            fqn.subdomain
+              ? findSubdomainZoneFileByName(currentInfo.zonefile, fqn.subdomain)
+              : (Right({
+                  zonefile: currentInfo.zonefile,
+                  subdomain: undefined,
+                  owner: currentInfo.address,
+                }) as Either<
+                  Error,
+                  { zonefile: string; subdomain: undefined; owner: string }
+                >)
+          )
+        )
+        .pipe(
+          map((v) =>
+            v.flatMap(({ zonefile, subdomain, owner }) =>
+              ensureZonefileMatchesName({
+                zonefile: zonefile,
+                name: fqn.name,
+                namespace: fqn.namespace,
+                subdomain: subdomain,
+              })
+                .flatMap(parseZoneFileAndExtractNameinfo)
+                .map((nameInfo) => ({ ...nameInfo, owner }))
             )
-        })
-      )
+          )
+        )
+        .pipe(chain((eith) => eitherToFuture(eith)))
+        .pipe(
+          chain(({ tokenUrl, owner }) =>
+            fetchAndVerifySignedToken(tokenUrl, owner)
+          )
+        )
+        .pipe(
+          mapRej(
+            (err) =>
+              new Error(
+                `PostResolution: failed to fetch latest public key, error: ${err.message}`
+              )
+          )
+        )
+        .pipe(map((publicKey) => ({ publicKey, did })))
     })
   )
 }
@@ -107,10 +128,8 @@ export const resolve = (did: string) =>
           ? getPublicKeyForMigratedDid(parsedDID)
           : getPublicKeyForDID(parsedDID)
         ).pipe(
-          chain(({ name, publicKey }) =>
-            postResolve(name, did, publicKey).pipe(map(buildDidDoc))
-          )
+          chain(({ name }) => postResolve(name, did).pipe(map(buildDidDoc)))
         )
       )
-      .fold(reject, identity)
+      .fold((e) => createRejectedFuture<Error, DIDDocument>(e), identity)
   )

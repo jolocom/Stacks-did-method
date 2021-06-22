@@ -1,13 +1,14 @@
-import {
-  chain,
-  map,
-} from "fluture"
+import { chain, map } from "fluture"
 import { Right } from "monet"
 import { fetchTransactionById, fetchZoneFileForName } from "../api"
 import { StacksV2DID } from "../types"
 import { eitherToFuture } from "./general"
 import { parseAndValidateTransaction } from "./transactions"
-import { ensureZonefileMatchesName, findSubdomainZonefile, parseZoneFileAndExtractNameinfo } from "./zonefile"
+import {
+  ensureZonefileMatchesName,
+  findSubdomainZonefile,
+  parseZoneFileAndExtractNameinfo,
+} from "./zonefile"
 
 export const mapDidToBNSName = (did: StacksV2DID) =>
   getZonefileForDid(did)
@@ -47,4 +48,3 @@ const getZonefileForDid = (did: StacksV2DID) =>
           )
       )
     )
-

@@ -80,7 +80,7 @@ concatenating two pieces of information:
   `d27cb8d9cd4a9f21b1582c5c89a0d303aa613261ad41b729b48bf714f9cd1a02`
 
 The resulting DID -
-`did:stacks:v2:SP6G7N19FKNW24XH5JQ5P5WR1DN10QWMKMF1WMB3-d27cb8d9cd4a9f21b1582c5c89a0d303aa613261ad41b729b48bf714f9cd1a02`
+`did:stack:v2:SP6G7N19FKNW24XH5JQ5P5WR1DN10QWMKMF1WMB3-d27cb8d9cd4a9f21b1582c5c89a0d303aa613261ad41b729b48bf714f9cd1a02`
 contains enough information to map it to the corresponding BNS name, and retrieve and verify the associated public keys (as elaborated on in section 3.3).
 
 ## 1.3 Off-chain DIDs
@@ -107,7 +107,7 @@ names, each off-chain name is owned by an address. A resolvable Stacks V2 DID ca
 on-chain name, not off-chain, TODO update once good example is found*
 
 The resulting did -
-`did:stacks:v2:SP6G7N19FKNW24XH5JQ5P5WR1DN10QWMKMF1WMB3-d27cb8d9cd4a9f21b1582c5c89a0d303aa613261ad41b729b48bf714f9cd1a02`
+`did:stack:v2:SP6G7N19FKNW24XH5JQ5P5WR1DN10QWMKMF1WMB3-d27cb8d9cd4a9f21b1582c5c89a0d303aa613261ad41b729b48bf714f9cd1a02`
 contains enough information to retrieve and verify the public keys associated
 with the address during the resolution process (as described in section 3.3).
 
@@ -238,7 +238,7 @@ For example, to register the name `demo` on a registrar for `example.id`:
 ```bash
 $ curl -X POST -H 'Authorization: bearer API-KEY-IF-USED' -H 'Content-Type: application/json' \
 > --data '{"zonefile": "$ORIGIN demo\n$TTL 3600\n_https._tcp URI 10 1 \"https://gaia.blockstack.org/hub/1HgW81v6MxGD76UwNbHXBi6Zre2fK8TwNi/profile.json\"\n", \
->          "name": "spqr", \
+>          "name": "demo", \
 >          "owner_address": "1HgW81v6MxGD76UwNbHXBi6Zre2fK8TwNi"}' \
 > http://localhost:3000/register/
 ```
@@ -385,7 +385,7 @@ ${name} TXT "owner=${new_address}" "seqn=${update_counter}" "parts=${length_of_z
 The string is a well-formed DNS TXT record with the following fields:
 
 * The `${name}` field is the subdomain name without the on-chain suffix (e.g.
-  `spqr` in `spqr.res_publica.id`.
+  `demo` in `demo.example.id`.
 * The `${new_address}` field is the new owner address of the subdomain name.
 * The `${update_counter}` field is a non-negative integer equal to the number of
   subdomain name operations that have occurred so far.  It starts with 0 when
@@ -457,6 +457,28 @@ record for their DID's underlying name that (1) changes the owner address to a
 base58-check encoding of 20 bytes of 0's), and (2) changes the zone file to
 include an unresolvable URL.  This prevents the DID from resolving, and prevents
 it from being updated.
+
+## 3.5 Migration of Stacks v1 DIDs
+
+The previously developed Blockstack `did:stack:` DID method ([defined here](https://github.com/blockstack/stacks-blockchain/blob/stacks-1.0/docs/blockstack-did-spec.md#blockstack-did-method-specification)) allows users to
+derive a valid, resolvable `did:stack:` DID given a BNS name they own, similarly to the approach outlined in this document. 
+
+Both the `did:stack` and `did:stack:v2` DID methods rely on the BNS system (although different itterations of it) to enable the resolution of a DID to a set of public keys via a BNS name.
+
+As described in the [BNS documentation](https://docs.stacks.co/build-apps/references/bns), the Stacks V1 blockchain implemented BNS through first-order name operations (written to the underlying chain). In Stacks V2, BNS is instead implemented through a smart-contract loaded during the genesis block.
+
+The BNS smart contract can be used to resolve both names registered using the V2, as well as the V1 BNS implementations (names registered on V1 have been migrated to the new system, and were included in the initial BNS contract state during deployment).
+
+Any valid *on-chain* v1 DID (e.g. `did:stack`) can therefore be easily updated to a valid, resolvable Stacks v2 on-chain DID (given that the underlying BNS name is resolvable via the BNS contract) by updating the NSI part of the DID in accordance with the structure defined in this document. The general migration steps for such a DID are:
+
+1. Replace the `did:stack` DID Method identifier with `did:stack:v2`.
+2. Extract the `address` and `index` values encoded in the NSI.
+3. Discard the `index` value. In the new BNS system each principal can only hold
+one on-chain name. The `index` part of the NSI needs to be replaced with the
+identifier of the Stacks transaction which registered the name.
+4. Given that the name record was migrated (i.e. included in the initial state of the BNS contract during deployment, and not registered using a `name-update`, `name-import`, etc. transaction) no Stacks transaction ID is available to uniquely reference the registration. Instead, the identifier of the contract deployment transaction can be used.
+
+*A example, plus a link to a code snippet / test case will be included shortly.*
 
 # 4. Security Considerations
 

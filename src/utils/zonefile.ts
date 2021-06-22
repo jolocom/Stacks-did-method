@@ -1,5 +1,10 @@
 import { extractTokenFileUrl, fetchAndVerifySignedToken } from "./signedToken"
-import { decodeFQN, eitherToFuture, encodeFQN, normalizeAddress } from "./general"
+import {
+  decodeFQN,
+  eitherToFuture,
+  encodeFQN,
+  normalizeAddress,
+} from "./general"
 import "isomorphic-fetch"
 import { Right, Left, Either } from "monet"
 import { chain } from "fluture"
@@ -55,7 +60,35 @@ const parseZoneFileTXT = (entries: string[]) =>
     { zonefile: "", owner: "" }
   )
 
-// TODO return the subdomain here
+export const findSubdomainZoneFileByName = (
+  nameZonefile: string,
+  subdomain: string
+): Either<
+  Error,
+  { zonefile: string; subdomain: string | undefined; owner: string }
+> => {
+  const parsedZoneFile = parseZoneFile(nameZonefile)
+
+  if (parsedZoneFile.txt) {
+    const match = parsedZoneFile.txt.find(
+      (arg: { txt: string[]; name: string }) => {
+        return arg.name === subdomain
+      }
+    )
+
+    if (match) {
+      const { owner, zonefile } = parseZoneFileTXT(match.txt)
+      return Right({
+        subdomain: match.name,
+        owner,
+        zonefile: Buffer.from(zonefile, "base64").toString("ascii"),
+      })
+    }
+  }
+
+  return Left(new Error("No zonefile for subdomain found"))
+}
+
 export const findSubdomainZonefile = (
   nameZonefile: string,
   owner: string
@@ -118,6 +151,6 @@ export const parseZoneFileAndExtractTokenUrl = (
 }
 
 export const getPublicKeyUsingZoneFile = (zf: string, ownerAddress: string) =>
-  eitherToFuture(parseZoneFileAndExtractNameinfo(zf))
-    .pipe(chain(({tokenUrl}) => fetchAndVerifySignedToken(tokenUrl, ownerAddress)))
-
+  eitherToFuture(parseZoneFileAndExtractNameinfo(zf)).pipe(
+    chain(({ tokenUrl }) => fetchAndVerifySignedToken(tokenUrl, ownerAddress))
+  )

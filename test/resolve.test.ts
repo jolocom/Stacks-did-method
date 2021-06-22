@@ -7,6 +7,7 @@ import { resolve } from "../src/"
 import {
   preorderAndRegisterName,
   revokeName,
+  revokeSubdomain,
   rotateKey,
 } from "../src/registrar/index"
 import { getKeyPair, StacksKeyPair } from "../src/registrar/utils"
@@ -22,7 +23,6 @@ import {
   getPublicKey,
   publicKeyToAddress,
 } from "@stacks/transactions"
-const { parseZoneFile, makeZoneFile } = require("zone-file")
 const b58 = require("bs58")
 
 var chaiAsPromised = require("chai-as-promised")
@@ -58,7 +58,7 @@ const INIT_NAMESPACE = true
 describe("did:stacks:v2 resolver", () => {
   let testNamespace = "testn"
   let testName = "testname"
-  let testSubdomainName = randomBytes(4).toString("hex")
+  let testSubdomainName = "offch"
   let testDid: string = ""
 
   before(async () => {
@@ -149,15 +149,18 @@ describe("did:stacks:v2 resolver", () => {
       let testDidValid: {
         did: string
         key: StacksKeyPair
+        fqn: string
       }
 
       let testDidInvalid: {
         did: string
         key: StacksKeyPair
+        fqn: string
       }
 
       before(async () => {
-        const { invalidDid, validDid } = await setupSubdomains(
+        // const { invalidDid, validDid } = await setupSubdomains(
+        const { validDid } = await setupSubdomains(
           encodeFQN({
             name: testSubdomainName,
             namespace: testNamespace,
@@ -167,7 +170,7 @@ describe("did:stacks:v2 resolver", () => {
         )
 
         testDidValid = validDid
-        testDidInvalid = invalidDid
+        // testDidInvalid = invalidDid
       })
 
       it("correctly resolves off-chain Stacks v2 DID", async () => {
@@ -181,6 +184,21 @@ describe("did:stacks:v2 resolver", () => {
             publicKey: compressedPublicKey.data.toString("hex"),
           })
         )
+      })
+
+      it("correctly fails to resolve a off-chain Stacks v2 DID after it was revoked", async () => {
+        const { fqn, key, did } = testDidValid
+        await revokeSubdomain(
+          fqn,
+          subdomainRegistrarKeyPair,
+          {
+            ownerKeyPair: key,
+          },
+          mockNet
+        )
+
+        return expect(resolve(did))
+          .rejectedWith("PostResolution: failed to fetch latest public key")
       })
 
       it("fails to resolve non-existent valid DID", async () => {
@@ -197,7 +215,7 @@ describe("did:stacks:v2 resolver", () => {
         ).rejectedWith("could not find transaction by ID")
       })
 
-      it("fails to resolve if associated public key does not map to the name owner", async () => {
+      it.skip("fails to resolve if associated public key does not map to the name owner", async () => {
         return expect(resolve(testDidInvalid.did)).rejectedWith(
           "Token issuer public key does not match the verifying value"
         )

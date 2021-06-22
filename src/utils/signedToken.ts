@@ -31,7 +31,10 @@ export const verifyTokenAndGetPubKey =
     }
   }
 
-export const fetchAndVerifySignedToken = (tokenUrl: string, ownerAddress: string) =>
+export const fetchAndVerifySignedToken = (
+  tokenUrl: string,
+  ownerAddress: string
+) =>
   fetchSignedToken(tokenUrl)
     .pipe(map(verifyTokenAndGetPubKey(normalizeAddress(ownerAddress))))
     .pipe(chain(eitherToFuture))

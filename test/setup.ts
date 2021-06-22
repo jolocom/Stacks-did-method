@@ -9,13 +9,10 @@ import { decodeFQN, encodeFQN } from "../src/utils/general"
 import { fetchNameInfo } from "../src/api"
 import { map, promise } from "fluture"
 import { encodeStacksV2Did } from "../src/utils/did"
-import { randomBytes } from "crypto"
-import {
-  AddressVersion,
-  getPublicKey,
-  publicKeyToAddress,
-  publicKeyToString,
-} from "@stacks/transactions"
+// import {
+//   AddressVersion,
+//   publicKeyToAddress,
+// } from "@stacks/transactions"
 
 export const setup = async (
   name: string,
@@ -59,12 +56,10 @@ export const setupSubdomains = async (
   const { name, namespace } = decodeFQN(fqn)
   const keyPair1 = getKeyPair()
 
+  const validDIDFqn = encodeFQN({ name, namespace, subdomain: "validsubd" })
+
   const validDid = await registerSubdomain(
-    encodeFQN({
-      name,
-      namespace,
-      subdomain: Math.random().toString(36).slice(2),
-    }),
+    validDIDFqn,
     nameOwnerKey,
     {
       ownerKeyPair: keyPair1,
@@ -72,37 +67,37 @@ export const setupSubdomains = async (
     network
   )
 
-  const keyPair2 = getKeyPair()
-  const invalidOwner = publicKeyToAddress(
-    AddressVersion.TestnetSingleSig,
-    getKeyPair().publicKey
-  )
-
   await promise(wait(2500))
-  const invalidDid = await registerSubdomain(
-    encodeFQN({
-      name,
-      namespace,
-      subdomain: randomBytes(4).toString("hex"),
-    }),
-    nameOwnerKey,
-    {
-      ownerKeyPair: keyPair2,
-      owner: invalidOwner,
-    },
-    network
-  )
 
-  await promise(wait(2500))
+  //   const keyPair2 = getKeyPair()
+  //   const invalidOwner = publicKeyToAddress(
+  //     AddressVersion.TestnetSingleSig,
+  //     getKeyPair().publicKey
+  //   )
+  //
+  //   const invalidDIDFqn = encodeFQN({ name, namespace, subdomain: 'invalidsubd' })
+  //   const invalidDid = await registerSubdomain(
+  //     invalidDIDFqn,
+  //     nameOwnerKey,
+  //     {
+  //       ownerKeyPair: keyPair2,
+  //       owner: invalidOwner,
+  //     },
+  //     network
+  //   )
+  //
+  //   await promise(wait(2500))
 
   return {
     validDid: {
       did: validDid,
       key: keyPair1,
+      fqn: validDIDFqn,
     },
-    invalidDid: {
-      did: invalidDid,
-      key: keyPair2,
-    },
+    //  invalidDid: {
+    //    did: invalidDid,
+    //    key: keyPair2,
+    //    fqn: invalidDIDFqn
+    //  },
   }
 }
