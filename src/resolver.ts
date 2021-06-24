@@ -25,19 +25,21 @@ import {
   resolve as fResolve,
   FutureInstance,
   promise,
-  chainRej,
   mapRej,
 } from "fluture"
 import { getPublicKeyForMigratedDid } from "./migrated"
 import { mapDidToBNSName } from "./utils/bns"
 import { Either, Right } from "monet"
 import { DIDDocument } from "did-resolver"
+import { StacksMainnet, StacksNetwork } from "@stacks/network"
 
 const getPublicKeyForDID = (
-  did: StacksV2DID
+  did: StacksV2DID,
+  network: StacksNetwork
 ): FutureInstance<Error, { publicKey: string; name: string }> =>
-  //@ts-ignore Left is typed as unknown
-  mapDidToBNSName(did).pipe(
+  //@ts-ignore
+  mapDidToBNSName(did, network)
+  .pipe(
     chain(({ name, namespace, subdomain, tokenUrl }) =>
       fetchAndVerifySignedToken(tokenUrl, did.address).pipe(
         map((key) => ({
@@ -50,11 +52,12 @@ const getPublicKeyForDID = (
 
 const postResolve = (
   name: string,
-  did: string
+  did: string,
+  network: StacksNetwork
 ): FutureInstance<Error, { did: string; publicKey: string }> => {
   const fqn = decodeFQN(name)
 
-  return fetchNameInfo(fqn).pipe(
+  return fetchNameInfo(network.coreApiUrl)(fqn).pipe(
     chain((currentInfo) => {
       if (currentInfo.status === "name-revoke") {
         return createRejectedFuture<Error, { did: string; publicKey: string }>(
@@ -62,7 +65,7 @@ const postResolve = (
         )
       }
 
-      return getCurrentBlockNumber()
+      return getCurrentBlockNumber(network.coreApiUrl)
         .pipe(
           chain((currentBlock) => {
             if (currentInfo.expire_block > currentBlock) {
@@ -120,16 +123,24 @@ const postResolve = (
   )
 }
 
-export const resolve = (did: string) =>
-  promise(
-    parseStacksV2DID(did)
-      .map((parsedDID) =>
-        (isMigratedOnChainDid(parsedDID)
-          ? getPublicKeyForMigratedDid(parsedDID)
-          : getPublicKeyForDID(parsedDID)
-        ).pipe(
-          chain(({ name }) => postResolve(name, did).pipe(map(buildDidDoc)))
+export const getResolver = (
+  stacksNetwork: StacksNetwork = new StacksMainnet()
+) => {
+  const resolve = (did: string) =>
+    promise(
+      parseStacksV2DID(did)
+        .map((parsedDID) =>
+          (isMigratedOnChainDid(parsedDID) // TODO Check if it matches network, i.e. mainnet vs testnet
+            ? getPublicKeyForMigratedDid(parsedDID, stacksNetwork)
+            : getPublicKeyForDID(parsedDID, stacksNetwork)
+          ).pipe(
+            chain(({ name }) => postResolve(name, did, stacksNetwork).pipe(map(buildDidDoc)))
+          )
         )
-      )
-      .fold((e) => createRejectedFuture<Error, DIDDocument>(e), identity)
-  )
+        .fold((e) => createRejectedFuture<Error, DIDDocument>(e), identity)
+    )
+
+    // @TODO integrate with DID resolver
+    return resolve
+}
+

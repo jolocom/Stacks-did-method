@@ -24,7 +24,6 @@ export const ensureZonefileMatchesName = ({
 }): Either<Error, string> => {
   const parsedZoneFile = parseZoneFile(zonefile)
   const origin = decodeFQN(parsedZoneFile["$origin"])
-
   if (
     origin.name !== name ||
     origin.namespace !== namespace ||
@@ -46,7 +45,7 @@ export const ensureZonefileMatchesName = ({
   return Right(zonefile)
 }
 
-const parseZoneFileTXT = (entries: string[]) =>
+export const parseZoneFileTXT = (entries: string[]) =>
   entries.reduce(
     (parsed, current) => {
       const [prop, value] = current.split("=")
@@ -57,7 +56,7 @@ const parseZoneFileTXT = (entries: string[]) =>
 
       return { ...parsed, [prop]: value }
     },
-    { zonefile: "", owner: "" }
+    { zonefile: "", owner: "", seqn: "0" }
   )
 
 export const findSubdomainZoneFileByName = (
@@ -70,11 +69,9 @@ export const findSubdomainZoneFileByName = (
   const parsedZoneFile = parseZoneFile(nameZonefile)
 
   if (parsedZoneFile.txt) {
-    const match = parsedZoneFile.txt.find(
-      (arg: { txt: string[]; name: string }) => {
-        return arg.name === subdomain
-      }
-    )
+    const match = parsedZoneFile.txt.find((arg: { name: string }) => {
+      return arg.name === subdomain
+    })
 
     if (match) {
       const { owner, zonefile } = parseZoneFileTXT(match.txt)
@@ -86,7 +83,7 @@ export const findSubdomainZoneFileByName = (
     }
   }
 
-  return Left(new Error("No zonefile for subdomain found"))
+  return Left(new Error(`No zonefile for subdomain ${subdomain} found`))
 }
 
 export const findSubdomainZonefile = (
@@ -102,11 +99,9 @@ export const findSubdomainZonefile = (
   const parsedZoneFile = parseZoneFile(nameZonefile)
 
   if (parsedZoneFile.txt) {
-    const match = parsedZoneFile.txt.find(
-      (arg: { txt: string[]; name: string }) => {
-        return parseZoneFileTXT(arg.txt).owner === normalizeAddress(owner)
-      }
-    )
+    const match = parsedZoneFile.txt.find((arg: { txt: string[] }) => {
+      return parseZoneFileTXT(arg.txt).owner === normalizeAddress(owner)
+    })
 
     if (match) {
       return Right({
@@ -119,7 +114,7 @@ export const findSubdomainZonefile = (
     }
   }
 
-  return Left(new Error("No zonefile for subdomain found"))
+  return Left(new Error(`No zonefile for subdomain owned by ${owner} found`))
 }
 
 export const parseZoneFileAndExtractNameinfo = (zonefile: string) => {
@@ -152,5 +147,5 @@ export const parseZoneFileAndExtractTokenUrl = (
 
 export const getPublicKeyUsingZoneFile = (zf: string, ownerAddress: string) =>
   eitherToFuture(parseZoneFileAndExtractNameinfo(zf)).pipe(
-    chain(({ tokenUrl }) => fetchAndVerifySignedToken(tokenUrl, ownerAddress))
+    chain(({ tokenUrl }) => fetchAndVerifySignedToken(tokenUrl, normalizeAddress(ownerAddress)))
   )
