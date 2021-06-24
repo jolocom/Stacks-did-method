@@ -59,11 +59,11 @@ export const rekeySubdomain = async (
   }
 
   const zf = await promise(
-      fetchZoneFileForName(network.coreApiUrl)({
-        name,
-        namespace,
-      })
-    )
+    fetchZoneFileForName(network.coreApiUrl)({
+      name,
+      namespace,
+    })
+  )
 
   const currentZf = parseZoneFile(zf)
 
@@ -215,7 +215,8 @@ const updateName = async (
     s.signOrigin(keyPair.privateKey)
 
     return broadcastTransaction(tx, network, Buffer.from(newZoneFile)).then(
-      (txId) => promise(waitForConfirmation(txId as string, network)).then(() => txId)
+      (txId) =>
+        promise(waitForConfirmation(txId as string, network)).then(() => txId)
     )
   })
 }

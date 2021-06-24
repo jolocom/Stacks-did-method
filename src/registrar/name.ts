@@ -75,7 +75,9 @@ const registerName = (
     return broadcastTransaction(tx, network, Buffer.from(zonefile)).then(
       (txId) =>
         promise(
-          waitForConfirmation(txId as string, network).pipe(chain(() => wait(5000)))
+          waitForConfirmation(txId as string, network).pipe(
+            chain(() => wait(5000))
+          )
         ).then(() => txId as string)
     )
   })

@@ -7,7 +7,7 @@ import {
   isCompressed,
   compressPublicKey,
 } from "@stacks/transactions"
-import { StacksNetwork } from '@stacks/network'
+import { StacksNetwork } from "@stacks/network"
 import { fetchTransactionById } from "../api"
 import Future, { chain, resolve, reject, FutureInstance } from "fluture"
 import FormData from "form-data"
@@ -34,7 +34,7 @@ export const getKeyPair = (privateKey?: string | Buffer): StacksKeyPair => {
 export const waitForConfirmation = (
   txId: string,
   network: StacksNetwork,
-  delay: number = 3000,
+  delay: number = 3000
 ): FutureInstance<Error, {}> =>
   wait(delay)
     .pipe(chain(() => fetchTransactionById(network.coreApiUrl)(txId)))

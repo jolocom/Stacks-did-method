@@ -13,7 +13,7 @@
   "scripts": {
     "build": "yarn tsc -p ./tsconfig.json",
     "format": "prettier --no-semi --write ./src/**/*.ts ./test/**/*.ts",
-    "test": "mocha ./test/resolve.test.ts",
+    "test:integration": "mocha ./test/resolve.test.ts",
     "test:setup": "rm ./test/integration/artifacts.json; ts-node ./test/integration/setup.ts",
     "test:watch": "mocha --watch"
   },

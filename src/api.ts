@@ -37,7 +37,7 @@ const fetchJSON = <T>(endpoint: string): FutureInstance<Error, T> => {
 export const fetchZoneFileForName =  (apiEndpoint: string) => (args: {
   name: string
   namespace: string
-  zonefileHash: string
+  zonefileHash?: string
 }): FutureInstance<Error, string> => {
   const fqn = encodeFQN({ name: args.name, namespace: args.namespace })
   const endpoint = `${apiEndpoint}/v1/names/${fqn}/zonefile/${

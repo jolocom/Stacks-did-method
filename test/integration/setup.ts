@@ -18,7 +18,7 @@ import { encodeStacksV2Did } from "../../src/utils/did"
 import { testNames, testNamespace, testSubdomains } from "./data"
 import { writeFileSync } from "fs"
 import { wait } from "../../src/registrar/utils"
-var path = require('path');
+var path = require("path")
 
 const network = new StacksMocknet()
 
@@ -144,7 +144,7 @@ export const setup = async () => {
   const offChainDids = await setupSubdomains()
 
   writeFileSync(
-    path.join(__dirname, 'artifacts.json'),
+    path.join(__dirname, "artifacts.json"),
     JSON.stringify({
       onChainDids,
       offChainDids,

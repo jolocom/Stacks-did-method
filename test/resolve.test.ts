@@ -7,7 +7,16 @@ import { AddressVersion, compressPublicKey, publicKeyToAddress, randomBytes } fr
 import { getKeyPair } from "../src/registrar/utils"
 import { BNS_CONTRACT_DEPLOY_TXID } from "../src/constants"
 import { StacksMainnet, StacksMocknet } from "@stacks/network"
-const { onChainDids, offChainDids } = require('./integration/artifacts.json')
+
+const getTestDids = () => {
+  try {
+    const { onChainDids, offChainDids } = require('./integration/artifacts.json')
+    return { onChainDids, offChainDids }
+  } catch {
+    console.error('No DIDs found in artifacts.json, make sure to run yarn test:setup')
+    process.exit(0)
+  }
+}
 
 var chaiAsPromised = require("chai-as-promised")
 
@@ -17,14 +26,7 @@ chai.should()
 const mocknetResolve = getResolver(new StacksMocknet())
 
 describe("did:stacks:v2 resolver", () => {
-  const { simple, revoked, rotated } = onChainDids
-
-  before(() => {
-    if (!simple || !revoked || !rotated) {
-      throw new Error('No DIDs found in artifacts.json, make sure to run setup.ts before running this test')
-    }
-  })
-
+  const { simple, revoked, rotated } = getTestDids().onChainDids
    describe("On-chain Stacks v2 DIDs", () => {
      it("correctly resolves newly created Stacks v2 DID", async () => {
        return expect(mocknetResolve(simple)).to.eventually.deep.eq(
@@ -75,7 +77,7 @@ describe("did:stacks:v2 resolver", () => {
    })
 
    describe("Off-chain Stacks v2 DIDs", () => {
-     const { simple, rotated, revoked } = offChainDids
+     const { simple, rotated, revoked } = getTestDids().offChainDids
 
      before(() => {
        if (!simple || !revoked || !rotated) {

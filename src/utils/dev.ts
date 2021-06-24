@@ -21,7 +21,7 @@ export const findValidNames =
 
               return fetchZoneFileForName(network.coreApiUrl)({
                 name,
-                namespace
+                namespace,
               })
                 .pipe(mapRej(() => None()))
                 .pipe(

@@ -147,5 +147,7 @@ export const parseZoneFileAndExtractTokenUrl = (
 
 export const getPublicKeyUsingZoneFile = (zf: string, ownerAddress: string) =>
   eitherToFuture(parseZoneFileAndExtractNameinfo(zf)).pipe(
-    chain(({ tokenUrl }) => fetchAndVerifySignedToken(tokenUrl, normalizeAddress(ownerAddress)))
+    chain(({ tokenUrl }) =>
+      fetchAndVerifySignedToken(tokenUrl, normalizeAddress(ownerAddress))
+    )
   )
