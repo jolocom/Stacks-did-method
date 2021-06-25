@@ -92,15 +92,16 @@ const postResolve = (
         )
         .pipe(
           map((v) =>
-            v.flatMap(({ zonefile, subdomain, owner }) =>
-              ensureZonefileMatchesName({
-                zonefile: zonefile,
+            v.flatMap(({ zonefile, subdomain, owner }) => {
+              return ensureZonefileMatchesName({
+                zonefile,
                 name: fqn.name,
                 namespace: fqn.namespace,
-                subdomain: subdomain,
+                subdomain,
               })
                 .flatMap(parseZoneFileAndExtractNameinfo)
                 .map((nameInfo) => ({ ...nameInfo, owner }))
+            }
             )
           )
         )
@@ -117,8 +118,7 @@ const postResolve = (
                 `PostResolution: failed to fetch latest public key, error: ${err.message}`
               )
           )
-        )
-        .pipe(map((publicKey) => ({ publicKey, did })))
+        ).pipe(map((publicKey) => ({ publicKey, did })))
     })
   )
 }

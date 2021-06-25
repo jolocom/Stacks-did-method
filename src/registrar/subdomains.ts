@@ -65,6 +65,8 @@ export const rekeySubdomain = async (
     })
   )
 
+  console.log(zf)
+
   const currentZf = parseZoneFile(zf)
 
   const subdomainZF = await buildSubdomainZoneFile(

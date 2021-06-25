@@ -24,6 +24,7 @@ export const ensureZonefileMatchesName = ({
 }): Either<Error, string> => {
   const parsedZoneFile = parseZoneFile(zonefile)
   const origin = decodeFQN(parsedZoneFile["$origin"])
+
   if (
     origin.name !== name ||
     origin.namespace !== namespace ||
@@ -119,7 +120,6 @@ export const findSubdomainZonefile = (
 
 export const parseZoneFileAndExtractNameinfo = (zonefile: string) => {
   const parsedZf = parseZoneFile(zonefile)
-
   const { name, namespace, subdomain } = decodeFQN(parsedZf["$origin"])
 
   return extractTokenFileUrl(zonefile).map((url) => ({
@@ -128,21 +128,6 @@ export const parseZoneFileAndExtractNameinfo = (zonefile: string) => {
     subdomain,
     tokenUrl: url,
   }))
-}
-
-export const parseZoneFileAndExtractTokenUrl = (
-  zonefile: string
-): Either<Error, string> => {
-  const parsedZf = parseZoneFile(zonefile)
-
-  const { name, namespace, subdomain } = decodeFQN(parsedZf["$origin"])
-
-  return ensureZonefileMatchesName({
-    zonefile,
-    name,
-    namespace,
-    subdomain,
-  }).flatMap(extractTokenFileUrl)
 }
 
 export const getPublicKeyUsingZoneFile = (zf: string, ownerAddress: string) =>

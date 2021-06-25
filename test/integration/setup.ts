@@ -81,6 +81,9 @@ export const setupNames = async () => {
 
 export const setupSubdomains = async () => {
   // Register the three subdomains
+  // The 2.5 sec waiting periods scattered around are there to ensure we wait a bit for
+  // the new zone file to propagate. If we try to query a Stacks node for it right away / too soon,
+  // we might get an empty string.
 
   const offChainDids = await Object.entries(testSubdomains).reduce(
     async (acc, [_, data]) =>
@@ -105,6 +108,8 @@ export const setupSubdomains = async () => {
       ),
     Promise.resolve({})
   )
+
+  await promise(wait(2500))
 
   await revokeSubdomain(
     encodeFQN({
