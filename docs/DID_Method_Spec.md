@@ -35,13 +35,13 @@ will continue to resolve to DID documents even if the system migrates to a new b
 
 Understanding how Blockstack DIDs operate requires understanding how Blockstack names operate. Fundamentally, a Blockstack DID is defined as a pointer to a *BNS name registered by an address*. The lifecycle of a Blockstack DID is therefore tied to the lifecycle of it's underlying BNS name.
 
-The Blockstack naming system differentiates between two types of names (and by extension, two types of resulting DIDs), *on-chain* and *off-chain* (elaborated on in the following subsections). Both on-chain and off-chain names (as well as the resulting DIDs) can be resolved to a set of singing keys, as well as additional metadata, using the BNS smart cntract, and the Gaya storage network, as outlined in section 3. 
+The Blockstack naming system differentiates between two types of names (and by extension, two types of resulting DIDs), *on-chain* and *off-chain* (elaborated on in the following subsections). Both on-chain and off-chain names (as well as the resulting DIDs) can be resolved to a set of singing keys, as well as additional metadata, using the BNS smart contract, and the Gaya storage network, as outlined in section 3. 
 
-## 1.2 On-Chain DIDs
+## 1.2 On-chain DIDs
 
 *On-chain DIDs* are based on [BNS names](https://docs.stacks.co/build-apps/references/bns#organization-of-bns), the records for which are stored and managed on the blockchain. The ownership / state of these names is managed by the BNS smart contract, and can be read / updated by interacting with the deployed smart contract directly (e.g. by calling the [`name-update`](https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L657) or [`name-resolve`](https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L928) functions).
 
-The BNS contract associates a number of properties with each registered name, such as the name's current owner (i.e. a [Stacks address](https://docs.stacks.co/understand-stacks/accounts)), the registration and expiry dates, as well the correponding DNS zone file (created and broadcasted by the name owner) which can be used to retrieve further information associated with the name (for further details please reffer to the [BNS documentation](https://docs.stacks.co/build-apps/references/bns)). The associated DNS zone file is expected to include a `URI` resource record, pointing to a signed [JSON Web Token](https://datatracker.ietf.org/doc/html/rfc7519) (JWT). The JWT is also expected to include a public key which hashes to the address of the current owner, and can be used to verify the associated signature.
+The BNS contract associates a number of properties with each registered name, such as the name's current owner (i.e. a [Stacks address](https://docs.stacks.co/understand-stacks/accounts)), the registration and expiry dates, as well the corresponding DNS zone file (created and broadcasted by the name owner) which can be used to retrieve further information associated with the name (for further details please refer to the [BNS documentation](https://docs.stacks.co/build-apps/references/bns)). The associated DNS zone file is expected to include a `URI` resource record, pointing to a signed [JSON Web Token](https://datatracker.ietf.org/doc/html/rfc7519) (JWT). The JWT is also expected to include a public key which hashes to the address of the current owner, and can be used to verify the associated signature.
 
 A resolvable Stacks v2 DID can be derived for any on-chain name by concatenating two pieces of information:
 
@@ -87,7 +87,7 @@ information: a Stacks address, and a Stacks transaction identifier.
 
 The **address** shall be a [c32check](https://github.com/blockstack/c32check#c32check) encoding of a version byte concatenated
 with the RIPEMD160 hash of a SHA256 hash of a DER-encoded secp256k1 public key.
-For example, in this Python 2 snippit:
+For example, in this Python 2 snippet:
 
 ```
 import hashlib
@@ -106,7 +106,7 @@ address = base58.b58check_encode(version_byte + ripemd160_sha256_pubkey.decode('
 
 The **transaction identifier** shall reference a valid Stacks blockchain transaction. As elaborated on in later sections, the referenced transaction is expected to encode a [`name-register`](https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L609), [`name-update`](https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L657), or [`name-import`](https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L438) call to the BNS contract.
 
-## 2.2 Address Encodings
+## 2.2 Address Encoding
 
 The address's version byte encodes whether or not a DID corresponds to an
 on-chain name transaction or an off-chain name transaction, and whether or not
@@ -199,7 +199,7 @@ URL. Note that its name must be either `_http._tcp` or `_https._tcp`, per the
 - The HTTP or HTTPS URL must resolve to a JSON Web token signed by a secp256k1
 public key that hashes to the `owner_address` field (as briefly described in section 1.2).
 
-The registrar will collect multiple such requests from subdomain owners before broadcasting a new batch of updates. It can do this by composing a new zone file which includes all received subdomain opperations, replicating it, and setting a new zone file hash with a [`name-update`](https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L657) transaction. This, in turn, replicates all subdomain operations it contains, and anchors the set of subdomain operations to an on-chain transaction.
+The registrar will collect multiple such requests from subdomain owners before broadcasting a new batch of updates. It can do this by composing a new zone file which includes all received subdomain operations, replicating it, and setting a new zone file hash with a [`name-update`](https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L657) transaction. This, in turn, replicates all subdomain operations it contains, and anchors the set of subdomain operations to an on-chain transaction.
 
 The BNS node's consensus rules ensure that only valid subdomain operations from valid [`name-register`](https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L609), [`name-update`](https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L657) or [`name-import`](https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L438) transactions will ever be stored.
 
@@ -255,14 +255,14 @@ address of the subdomain owner (as documented [here](https://docs.stacks.co/buil
 
 In case any of the listed owners matches the `address` encoded in the DID's NSI,
 the associated zone file is decoded and parsed. If the zone file is valid, the
-DID is mapped to the `subdomain` (retreved from the zone file), `name` and
+DID is mapped to the `subdomain` (retrieved from the zone file), `name` and
 `namespace` (extracted from the registration transaction). In case no `TXT` resource records are present, or none of the listed subdomains list the `address` encoded in the NSI as an owner, the DID is mapped to the `name` and `namespace` extracted from the referenced transaction object.
 
-Before the mapped BNS name can be returned, the signed JSON Web Token referenced in the relevant zone file is retrieved, and the included public key is used to verify the associated signature. If the signature verifies correctly, and the included public key hashes to the `address` encoded in the DID's NSI, this step completes succesfully, and the corresponding BNS name is returned, otherwise resolution fails with an error.
+Before the mapped BNS name can be returned, the signed JSON Web Token referenced in the relevant zone file is retrieved, and the included public key is used to verify the associated signature. If the signature verifies correctly, and the included public key hashes to the `address` encoded in the DID's NSI, this step completes successfully, and the corresponding BNS name is returned, otherwise resolution fails with an error.
 
 ### 3.2.2 Ensuring the DID is not deactivated
 
-As outlined in section 3.4, a Stacks v2 DID can be deactivated by revoking the underlying BNS name. Deactivated DIDs should no longer resolve to DID Documents / public keys (also revoked BNS names can not be reasigned or updated in the future, rendering the DID unusuable). 
+As outlined in section 3.4, a Stacks v2 DID can be deactivated by revoking the underlying BNS name. Deactivated DIDs should no longer resolve to DID Documents / public keys (also revoked BNS names can not be reassigned or updated in the future, rendering the DID unusable). 
 
 For on-chain names, the revocation status is tracked by the BNS smart contract (as can [be seen here](https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L92)), while for off-chain names, revocation is expressed by transferring the name to a "nothing-up-my-sleeve" address (as elaborated on in section 3.4). 
 
@@ -275,9 +275,9 @@ extension DID) to it's latest owner and set of public keys. As described in
 section 3.3, the keys associated with a DID can be rotated after the DID was created (e.g. by issuing a [`name-transfer`](https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L679) operation designating a new owner
 in the case of an on-chain BNS name). 
 
-Simillarly to the process described in subsection 3.2.3, the latest state associated with the relevant BNS name (either on-chain or off-chain) is retrieved, and, in case the owner of the underlying name has changed since the DID's creation,  the new public key needs to be retrieved and verified.
+Similarly to the process described in subsection 3.2.3, the latest state associated with the relevant BNS name (either on-chain or off-chain) is retrieved, and, in case the owner of the underlying name has changed since the DID's creation,  the new public key needs to be retrieved and verified.
 
-The process for retrieving the key is simillar to the one described in section
+The process for retrieving the key is similar to the one described in section
 3.2.1, namely it consists of fetching the latest zone file for the BNS name,
 finding the relevant `URI` resource record, fetching the referenced signed JSON
 Web Token, verifying the signature and the included public key(s), and finally
@@ -295,7 +295,7 @@ generate a well-formed DID Document "on the fly" and return it to the client.
 
 ## 3.3 Updating a Blockstack DID
 
-In case the public keys associated with a BNS name (and by extension a DID) need to be rotated, an appropriate ownership transfer operation can be assembled and broadcated by the current name owner. The process differs depending on whether an on-chain or off-chain name is being updated.
+In case the public keys associated with a BNS name (and by extension a DID) need to be rotated, an appropriate ownership transfer operation can be assembled and broadcasted by the current name owner. The process differs depending on whether an on-chain or off-chain name is being updated.
 
 ### 3.3.1 Updating an on-chain Blockstack DID
 
@@ -383,7 +383,7 @@ Blockstack nodes of the new state of the off-chain DID.
 
 ## 3.4 Deactivating a Stacks v2 DID
 
-If the user wants to deactivate their DID, they can do so by revoking the underlying BNS name. The process is implemented slightly differently depending on whether an on-chain or an off-chain name is being revoked, but is in essence simillar.  
+If the user wants to deactivate their DID, they can do so by revoking the underlying BNS name. The process is implemented slightly differently depending on whether an on-chain or an off-chain name is being revoked, but is in essence similar.  
 
 To revoke an on-chain name, the current owner can construct and broadcast a [`name-revoke`](https://github.com/blockstack/stacks-blockchain/blob/master/src/chainstate/stacks/boot/bns.clar#L712) transaction signed with the appropriate key. Once the transaction is processed and accepted by the Stacks network, the BNS contract state will be updated to list the corresponding on-chain name as revoked. Attempting to resolve a Stacks V2 DID based on a revoked name will result in an error (as described in section 3.2.3).
 
@@ -394,27 +394,17 @@ the base58-check encoding of 20 bytes of 0's), and (2) changes the zone file to
 include an unresolvable URL.  This prevents the DID from resolving, and prevents
 it from being updated in the future.
 
-## 3.5 Migration of Stacks v1 DIDs
+## 3.5 Migration from legacy Stack v1 DIDs
 
 The previously developed Blockstack `did:stack:` DID method ([defined
-here](https://github.com/blockstack/stacks-blockchain/blob/stacks-1.0/docs/blockstack-did-spec.md#blockstack-did-method-specification))
-allows users to derive a valid, resolvable `did:stack:` DID given a BNS name
+here](https://github.com/blockstack/stacks-blockchain/blob/stacks-1.0/docs/blockstack-did-spec.md#blockstack-did-method-specification)) allows users to derive a valid, resolvable `did:stack:` DID given a BNS name
 they own, similarly to the approach outlined in this document.
 
 Both the `did:stack` and `did:stack:v2` DID methods rely on the BNS system
-(although different itterations of it) to enable the resolution of a DID to a
+(although different iterations of it) to enable the resolution of a DID to a
 set of public keys via a BNS name.
 
-As described in the [BNS
-documentation](https://docs.stacks.co/build-apps/references/bns), the Stacks V1
-blockchain implemented BNS through first-order name operations (written to the
-underlying chain). In Stacks V2, BNS is instead implemented through a
-smart-contract loaded during the genesis block.
-
-The BNS smart contract can be used to resolve both names registered using the
-V2, as well as the V1 BNS implementations (names registered on V1 have been
-migrated to the new system, and were included in the initial BNS contract state
-during deployment).
+As described in the [BNS documentation](https://docs.stacks.co/build-apps/references/bns), the Stacks v1 blockchain implemented BNS through first-order name operations (written to the underlying chain). In Stacks V2, the name system is instead implemented through a smart-contract loaded during the genesis block. The initial state of the BNS contract includes all names registered using the previous iteration of the Blockstack naming system.
 
 Any valid *on-chain* v1 DID (e.g. `did:stack`) can therefore be easily updated
 to a valid, resolvable Stacks v2 on-chain DID (given that the underlying BNS
@@ -431,7 +421,9 @@ identifier of the Stacks transaction which registered the name.
 of the BNS contract during deployment, and not registered using a
 `name-update`, `name-import`, etc. transaction) no Stacks transaction ID is
 available to uniquely reference the registration. Instead, the identifier of
-the contract deployment transaction can be used.
+the contract deployment transaction can be used. The exact transaction identifiers are listed [here](https://github.com/jolocom/stacks-did-resolver/blob/feat/update-method-spec/src/constants.ts#L9).
+
+In order to migrate an off-chain Stacks v1 DID, the off-chain name owner must request that the registrar that instantiated the name broadcasts a `name-update` operation anchoring the zone file. The identifier of the `name-update` operation can then be concatenated with the address of the off-chain name owner to produce a resolvable off-chain Stacks v2 DID. This additional step is required because there is no way to uniquely identify an off-chain name imported during contract deployment using only an the subdomain owner address. Additional information (specifically the name with which the subdomain is associated) which is not part of the DID's NSI would be required.
 
 *A example, plus a link to a code snippet / test case will be included shortly.*
 
@@ -444,7 +436,7 @@ defend against them.
 ## 4.1 Public Blockchain Attacks
 
 Blockstack operates on top of a public blockchain, which could be attacked by a
-sufficiently pwowerful adversary -- such as rolling back and changing the
+sufficiently powerful adversary -- such as rolling back and changing the
 chain's transaction history, denying new transactions for Blockstack's name
 operations, or eclipsing nodes.
 
@@ -482,7 +474,7 @@ they are propagating.  This makes eclipsing a node maximally difficult -- an
 attacker would need to disrupt all of a the victim node's neighbor links.
 
 In addition to this protocol-level countermeasure, a user has the option of
-uploading zone files manually to their preferred Blockstack nodes.  If  vigilent
+uploading zone files manually to their preferred Blockstack nodes.  If  vigilant
 users have access to a replica of the zone files, they can re-seed Blockstack
 nodes that do not have them.
 

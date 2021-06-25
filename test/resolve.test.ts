@@ -25,7 +25,7 @@ chai.should()
 
 const mocknetResolve = getResolver(new StacksMocknet())
 
-describe("did:stacks:v2 resolver", () => {
+describe("did:stack:v2 resolver", () => {
   const { simple, revoked, rotated } = getTestDids().onChainDids
    describe("On-chain Stacks v2 DIDs", () => {
      it("correctly resolves newly created Stacks v2 DID", async () => {
@@ -62,7 +62,7 @@ describe("did:stacks:v2 resolver", () => {
       return expect(mainnetResolve(testDid)).to.eventually.include({ id: testDid })
     })
 
-    it("Should fail to resolve v2 DID based on expired name", async () => {
+    it.skip("Should fail to resolve v2 DID based on expired name", async () => {
       const testAddr = "SP15XBGYRVMKF1TWPXE6A3M0T2A87VYSVF9VFSZ1A"
       const testDid = encodeStacksV2Did({
         address: testAddr,
