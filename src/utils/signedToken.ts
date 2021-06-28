@@ -1,8 +1,10 @@
 import { getTokenFileUrl } from "@stacks/profile"
 import { Right, Left, Either } from "monet"
 import { verifyProfileToken } from "@stacks/profile"
+import { fetchSignedToken } from "../api"
+import { eitherToFuture, normalizeAddress } from "./general"
+import { chain, map } from "fluture"
 const { parseZoneFile } = require("zone-file")
-// import { parseZoneFile } from "zone-file"
 
 export const extractTokenFileUrl = (
   zoneFile: string
@@ -28,3 +30,11 @@ export const verifyTokenAndGetPubKey =
       return Left(e)
     }
   }
+
+export const fetchAndVerifySignedToken = (
+  tokenUrl: string,
+  ownerAddress: string
+) =>
+  fetchSignedToken(tokenUrl)
+    .pipe(map(verifyTokenAndGetPubKey(normalizeAddress(ownerAddress))))
+    .pipe(chain(eitherToFuture))

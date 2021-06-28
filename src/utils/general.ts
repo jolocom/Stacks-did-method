@@ -1,5 +1,6 @@
 import { c32addressDecode, c32address, c32ToB58 } from "c32check/lib/address"
-import { FutureInstance, reject } from "fluture"
+import { FutureInstance, reject, resolve } from "fluture"
+import { Either } from "monet"
 
 export const stripHexPrefixIfPresent = (data: string) => {
   if (data.startsWith("0x")) return data.substr(2)
@@ -48,20 +49,30 @@ export const decodeFQN = (fqdn: string): FQN => {
 
 // Given a testnet, or a mainnet c32 encoded address, will return the b58 encoded uncompressed address
 export const normalizeAddress = (address: string) => {
-  const [version, hash] = c32addressDecode(address)
-  if (version === 22) {
-    return c32ToB58(address)
-  }
+  try {
+    const [version, hash] = c32addressDecode(address)
+    if (version === 22) {
+      return c32ToB58(address)
+    }
 
-  if (version === 26) {
-    return c32ToB58(c32address(22, hash))
-  }
+    if (version === 26) {
+      return c32ToB58(c32address(22, hash))
+    }
 
-  throw new Error("Unknown version number, " + version)
+    throw new Error("Unknown version number, " + version)
+  } catch {
+    return address
+  }
 }
 
 export const createRejectedFuture = <R, F>(
   rejectWith: R
 ): FutureInstance<R, F> => {
   return reject(rejectWith) as FutureInstance<R, F>
+}
+
+export const eitherToFuture = <L, R>(
+  either: Either<L, R>
+): FutureInstance<L, R> => {
+  return either.fold((v) => createRejectedFuture<L, R>(v), resolve)
 }

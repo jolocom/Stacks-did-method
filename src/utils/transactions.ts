@@ -1,34 +1,24 @@
 import { compose } from "ramda"
-import { hexToCV, cvToValue, StacksTransaction } from "@stacks/transactions"
+import { hexToCV, cvToValue } from "@stacks/transactions"
 import { hexToAscii, stripHexPrefixIfPresent } from "./general"
-
-import {
-  fetchNameInfo,
-  fetchNamesOwnedByAddress,
-  fetchZoneFileForName,
-  fetchTransactionById,
-  fetchSignedToken,
-} from "../api"
 import { BNS_ADDRESSES } from "../constants"
 import { Left, Right, Either } from "monet"
 
 //TODO Find type for tx json
+
+export type TransactionArguments = {
+  name: string
+  namespace: string
+  zonefileHash: string
+  subdomainInception: boolean
+}
+
 export const parseAndValidateTransaction = (
   tx: any
-): Either<
-  Error,
-  {
-    name: string
-    namespace: string
-    zonefileHash: string
-  }
-> => {
-  const allowedFunctionNames = [
-    "name-register",
-    "name-import",
-    "name-update",
-    "name-renewal",
-  ]
+): Either<Error, TransactionArguments> => {
+  const validOnChainDidInceptionEvents = ["name-register", "name-import"]
+
+  const validOffChainDidInceptionEvents = ["name-import", "name-update"]
 
   if (tx.tx_status !== "success") {
     return Left(
@@ -51,15 +41,36 @@ export const parseAndValidateTransaction = (
 
   const calledFunction = contractCallData["function_name"]
 
-  if (!allowedFunctionNames.includes(calledFunction)) {
-    return Left(
-      new Error(
-        `call ${calledFunction} not allowed. supported methods are ${allowedFunctionNames.toString()}`
+  return extractContractCallArgs(contractCallData.function_args).map((data) => {
+    if (validOnChainDidInceptionEvents.includes(calledFunction)) {
+      return {
+        ...data,
+        subdomainInception: false,
+      }
+    } else if (validOffChainDidInceptionEvents.includes(calledFunction)) {
+      return {
+        ...data,
+        subdomainInception: true,
+      }
+    } else {
+      return Left(
+        new Error(
+          `call ${calledFunction} not allowed. supported methods are ${[
+            ...validOffChainDidInceptionEvents,
+            ...validOffChainDidInceptionEvents,
+          ].toString()}`
+        )
       )
-    )
-  }
-
-  return extractContractCallArgs(contractCallData.function_args)
+    }
+  }) as Either<
+    Error,
+    {
+      name: string
+      namespace: string
+      subdomainInception: boolean
+      zonefileHash: string
+    }
+  >
 }
 
 /**
