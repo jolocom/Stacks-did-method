@@ -14,7 +14,8 @@
     "test": "mocha",
     "build": "tsc -p ./tsconfig.json",
     "format": "prettier --no-semi --write ./src/**/*.ts ./test/**/*.ts",
-    "test:watch": "mocha --watch"
+    "test:watch": "mocha --watch",
+    "uni-resolver-driver": "docker build . -f uni-resolver-driver/Dockerfile -t jolocom/stacks-uni-resolver-driver && docker run --rm -it -p 8080:8080 jolocom/stacks-uni-resolver-driver"
   },
   "devDependencies": {
     "@hapi/hapi": "^20.1.4",
