@@ -12,7 +12,7 @@
   },
   "scripts": {
     "test": "mocha",
-    "build": "yarn tsc -p ./tsconfig.json",
+    "build": "tsc -p ./tsconfig.json",
     "format": "prettier --no-semi --write ./src/**/*.ts ./test/**/*.ts",
     "test:watch": "mocha --watch"
   },
@@ -33,6 +33,7 @@
     "typescript": "^4.2.4"
   },
   "dependencies": {
+    "@stacks/bns": "^2.0.0-beta.1",
     "@stacks/network": "2.0.0-beta.0",
     "@stacks/profile": "2.0.0-beta.0",
     "@stacks/transactions": "2.0.0-beta.0",
