@@ -10,7 +10,8 @@
     "strictNullChecks": true,
     "sourceMap": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": false,
+    "outDir": "js"
   },
   "include": [
     "tests",
