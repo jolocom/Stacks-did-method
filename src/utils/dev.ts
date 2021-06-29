@@ -4,29 +4,24 @@ import { fetchAllNames, fetchNameInfo, fetchZoneFileForName } from "../api"
 import { None, Some } from "monet"
 import { map, chain, mapRej, resolve } from "fluture"
 import { map as rMap } from "ramda"
+import { StacksNetwork } from "@stacks/network"
 
 export const findValidNames =
-  (onlyMigrated = false, ignoreExpired = false) =>
+  (network: StacksNetwork, onlyMigrated = false) =>
   (page = 0) => {
-    return fetchAllNames(page).pipe(
+    return fetchAllNames(network.coreApiUrl)(page).pipe(
       map(
         rMap((fqn: string) => {
           const { name, namespace } = decodeFQN(fqn)
-          return fetchNameInfo({ name, namespace }).pipe(
+          return fetchNameInfo(network.coreApiUrl)({ name, namespace }).pipe(
             chain((info) => {
               if (onlyMigrated && info["last_txid"] !== "0x") {
                 return resolve(None())
               }
 
-              //@TODO 17474
-              if (ignoreExpired && info.expire_block > 17474) {
-                return resolve(None())
-              }
-
-              return fetchZoneFileForName({
+              return fetchZoneFileForName(network.coreApiUrl)({
                 name,
                 namespace,
-                zonefileHash: info["zonefile_hash"],
               })
                 .pipe(mapRej(() => None()))
                 .pipe(

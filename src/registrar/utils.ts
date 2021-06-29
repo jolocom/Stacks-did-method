@@ -7,8 +7,10 @@ import {
   isCompressed,
   compressPublicKey,
 } from "@stacks/transactions"
+import { StacksNetwork } from "@stacks/network"
 import { fetchTransactionById } from "../api"
 import Future, { chain, resolve, reject, FutureInstance } from "fluture"
+import FormData from "form-data"
 
 export type StacksKeyPair = {
   privateKey: StacksPrivateKey
@@ -31,14 +33,15 @@ export const getKeyPair = (privateKey?: string | Buffer): StacksKeyPair => {
 
 export const waitForConfirmation = (
   txId: string,
+  network: StacksNetwork,
   delay: number = 3000
-): FutureInstance<Error, {}> => {
-  return wait(delay)
-    .pipe(chain(() => fetchTransactionById(txId)))
+): FutureInstance<Error, {}> =>
+  wait(delay)
+    .pipe(chain(() => fetchTransactionById(network.coreApiUrl)(txId)))
     .pipe(
       chain((tx) => {
         if (tx.tx_status === "pending") {
-          return waitForConfirmation(txId)
+          return waitForConfirmation(txId, network)
         }
 
         if (tx.tx_status === "success") {
@@ -48,11 +51,23 @@ export const waitForConfirmation = (
         return reject(new Error(`Tx failed, ${tx.tx_status} ${txId}`))
       })
     )
-}
 
 export const wait = (ms: number): FutureInstance<never, void> => {
   return Future((_, res) => {
     const t = setTimeout(res, ms)
     return () => clearTimeout(t)
   })
+}
+
+export const storeTokenFile = async (data: {}) => {
+  const fd = new FormData()
+  fd.append("file", Buffer.from(JSON.stringify([data])))
+
+  const res = await fetch(`https://ipfs.jolocom.io/api/v0/add?pin=false`, {
+    method: "POST",
+    //@ts-ignore
+    body: fd,
+  })
+  const { Hash } = await res.json()
+  return `https://ipfs.jolocom.io/api/v0/cat/${Hash}`
 }

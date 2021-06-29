@@ -11,9 +11,10 @@
     "node": ">=10"
   },
   "scripts": {
-    "test": "mocha",
     "build": "tsc -p ./tsconfig.json",
     "format": "prettier --no-semi --write ./src/**/*.ts ./test/**/*.ts",
+    "test:integration": "mocha ./test/resolve.test.ts",
+    "test:setup": "rm ./test/integration/artifacts.json; ts-node ./test/integration/setup.ts",
     "test:watch": "mocha --watch",
     "uni-resolver-driver": "docker build . -f uni-resolver-driver/Dockerfile -t jolocom/stacks-uni-resolver-driver && docker run --rm -it -p 8080:8080 jolocom/stacks-uni-resolver-driver"
   },

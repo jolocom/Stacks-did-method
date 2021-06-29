@@ -1,74 +1,52 @@
-import { c32ToB58 } from "c32check"
-import { extractTokenFileUrl } from "./signedToken"
-import { decodeFQN, encodeFQN, normalizeAddress } from "./general"
+import { extractTokenFileUrl, fetchAndVerifySignedToken } from "./signedToken"
+import {
+  decodeFQN,
+  eitherToFuture,
+  encodeFQN,
+  normalizeAddress,
+} from "./general"
 import "isomorphic-fetch"
-import { Some, None, Maybe, Right, Left, Either } from "monet"
-import { identity } from "ramda"
+import { Right, Left, Either } from "monet"
+import { chain } from "fluture"
 const { parseZoneFile } = require("zone-file")
 const b58 = require("bs58")
 
-export const getZonefileRecordsForName =
-  ({
-    name,
-    namespace,
-    subdomain,
-    owner,
-  }: {
-    name: string
-    namespace: string
-    subdomain?: string
-    owner?: string
-  }) =>
-  (zonefile: string): Either<Error, string> => {
-    const parsedZoneFile = parseZoneFile(zonefile)
-    const origin = decodeFQN(parsedZoneFile["$origin"])
+export const ensureZonefileMatchesName = ({
+  zonefile,
+  name,
+  namespace,
+  subdomain,
+}: {
+  zonefile: string
+  name: string
+  namespace: string
+  subdomain?: string
+}): Either<Error, string> => {
+  const parsedZoneFile = parseZoneFile(zonefile)
+  const origin = decodeFQN(parsedZoneFile["$origin"])
 
-    if (origin.name === name && origin.namespace === namespace) {
-      // We are in the wrong zonefile somehow :(
-      if (origin.subdomain && origin.subdomain !== subdomain) {
-        return Left(
-          new Error(
-            `Wrong zonefile, zf origin - ${origin}, looking for ${encodeFQN({
-              name,
-              namespace,
-              subdomain,
-            })}`
-          )
-        )
-      }
-
-      if (!origin.subdomain && subdomain) {
-        if (!owner) {
-          return Left(
-            new Error(`No owner passed. Can not find nested zonefile.`)
-          )
-        }
-      }
-
-      if (origin.subdomain && origin.subdomain === subdomain) {
-        return Right(zonefile)
-      }
-
-      if (parsedZoneFile.txt && owner) {
-        return Right(
-          findNestedZoneFileByOwner(zonefile, owner).cata(
-            () => zonefile,
-            (nestedZf) => nestedZf
-          )
-        )
-      }
-
-      if (!origin.subdomain && !subdomain) {
-        return Right(zonefile)
-      }
-
-      return Left(new Error("zonefile not found"))
-    }
-
-    return Left(new Error("Zonefile $ORIGIN did not match passed name"))
+  if (
+    origin.name !== name ||
+    origin.namespace !== namespace ||
+    origin.subdomain !== subdomain
+  ) {
+    return Left(
+      new Error(
+        `Wrong zonefile, zf origin - ${JSON.stringify(
+          origin
+        )}, looking for ${encodeFQN({
+          name,
+          namespace,
+          subdomain,
+        })}`
+      )
+    )
   }
 
-const parseZoneFileTXT = (entries: string[]) =>
+  return Right(zonefile)
+}
+
+export const parseZoneFileTXT = (entries: string[]) =>
   entries.reduce(
     (parsed, current) => {
       const [prop, value] = current.split("=")
@@ -79,61 +57,82 @@ const parseZoneFileTXT = (entries: string[]) =>
 
       return { ...parsed, [prop]: value }
     },
-    { zonefile: "", owner: "" }
+    { zonefile: "", owner: "", seqn: "0" }
   )
 
-const findNestedZoneFileByOwner = (
-  zonefile: string,
-  owner: string
-): Maybe<string> => {
-  const parsedZoneFile = parseZoneFile(zonefile)
+export const findSubdomainZoneFileByName = (
+  nameZonefile: string,
+  subdomain: string
+): Either<
+  Error,
+  { zonefile: string; subdomain: string | undefined; owner: string }
+> => {
+  const parsedZoneFile = parseZoneFile(nameZonefile)
 
   if (parsedZoneFile.txt) {
-    const match = parsedZoneFile.txt.find(
-      ({ txt }: { txt: string[]; name: string }) => {
-        return parseZoneFileTXT(txt).owner === normalizeAddress(owner)
-      }
-    )
+    const match = parsedZoneFile.txt.find((arg: { name: string }) => {
+      return arg.name === subdomain
+    })
 
     if (match) {
-      return Some(
-        Buffer.from(parseZoneFileTXT(match.txt).zonefile, "base64").toString(
-          "ascii"
-        )
-      )
+      const { owner, zonefile } = parseZoneFileTXT(match.txt)
+      return Right({
+        subdomain: match.name,
+        owner,
+        zonefile: Buffer.from(zonefile, "base64").toString("ascii"),
+      })
     }
   }
 
-  return None()
+  return Left(new Error(`No zonefile for subdomain ${subdomain} found`))
 }
 
-export const parseZoneFileAndExtractNameinfo =
-  (owner: string) => (zonefile: string) => {
-    const parsedZf = parseZoneFile(zonefile)
+export const findSubdomainZonefile = (
+  nameZonefile: string,
+  owner: string
+): Either<
+  Error,
+  {
+    zonefile: string
+    subdomain: string
+  }
+> => {
+  const parsedZoneFile = parseZoneFile(nameZonefile)
 
-    const { name, namespace, subdomain } = decodeFQN(parsedZf["$origin"])
+  if (parsedZoneFile.txt) {
+    const match = parsedZoneFile.txt.find((arg: { txt: string[] }) => {
+      return parseZoneFileTXT(arg.txt).owner === normalizeAddress(owner)
+    })
 
-    return extractTokenFileUrl(zonefile).map((url) => ({
-      name,
-      namespace,
-      subdomain,
-      owner,
-      tokenUrl: url,
-    }))
+    if (match) {
+      return Right({
+        subdomain: match.name,
+        zonefile: Buffer.from(
+          parseZoneFileTXT(match.txt).zonefile,
+          "base64"
+        ).toString("ascii"),
+      })
+    }
   }
 
-export const parseZoneFileAndExtractTokenUrl = (
-  zonefile: string,
-  owner: string
-): Either<Error, string> => {
-  const parsedZf = parseZoneFile(zonefile)
+  return Left(new Error(`No zonefile for subdomain owned by ${owner} found`))
+}
 
+export const parseZoneFileAndExtractNameinfo = (zonefile: string) => {
+  const parsedZf = parseZoneFile(zonefile)
   const { name, namespace, subdomain } = decodeFQN(parsedZf["$origin"])
 
-  return getZonefileRecordsForName({
+  return extractTokenFileUrl(zonefile).map((url) => ({
     name,
     namespace,
-    owner,
     subdomain,
-  })(zonefile).flatMap(extractTokenFileUrl)
+    tokenUrl: url,
+  }))
 }
+
+export const getPublicKeyUsingZoneFile = (zf: string, ownerAddress: string) =>
+  eitherToFuture(parseZoneFileAndExtractNameinfo(zf)).pipe(
+    chain(({ tokenUrl }) =>
+      fetchAndVerifySignedToken(tokenUrl, normalizeAddress(ownerAddress))
+    )
+  )
