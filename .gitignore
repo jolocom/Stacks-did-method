@@ -1,5 +1,7 @@
 *.log
 .DS_Store
+.idea
 node_modules
 dist
 test/integration/artifacts.json
+js
