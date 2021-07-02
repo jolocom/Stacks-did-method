@@ -1,4 +1,3 @@
-
 {
   "compilerOptions": {
     "module": "commonjs",
@@ -10,7 +9,9 @@
     "strictNullChecks": true,
     "sourceMap": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": false,
+    "outDir": "js",
+    "declaration": true
   },
   "include": [
     "tests",

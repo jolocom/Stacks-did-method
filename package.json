@@ -1,15 +1,17 @@
 {
-  "name": "counter",
-  "version": "0.0.0",
+  "name": "@jolocom/stacks-did-resolver",
+  "version": "0.1.2",
   "author": {
-    "name": "Exulansis",
-    "email": "rusu.eugeniu@gmx.de"
+    "name": "Jolocom Dev",
+    "email": "dev@jolocom.com"
   },
-  "repository": "https://github.com/Exulansis/counter.git",
-  "private": true,
+  "repository": "https://github.com/jolocom/stacks-did-resolver.git",
   "engines": {
     "node": ">=10"
   },
+  "files": [
+    "js"
+  ],
   "scripts": {
     "build": "tsc -p ./tsconfig.json",
     "format": "prettier --no-semi --write ./src/**/*.ts ./test/**/*.ts",
