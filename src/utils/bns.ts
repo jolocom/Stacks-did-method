@@ -21,11 +21,11 @@ const getZonefileForDid = (did: StacksV2DID, network: StacksNetwork) =>
     .pipe(map(parseAndValidateTransaction(did)))
     .pipe(chain(eitherToFuture))
     .pipe(
-      chain(({ ...nameInfo }) =>
+      chain((nameInfo) =>
         fetchZoneFileForName(network.coreApiUrl)(nameInfo)
           .pipe(
             map((zonefile) =>
-              did.type === DidType.offChain
+              did.metadata.type === DidType.offChain
                 ? findSubdomainZonefile(zonefile, did.address)
                 : Right({
                     zonefile,

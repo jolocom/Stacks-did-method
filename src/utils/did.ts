@@ -2,14 +2,13 @@ import { DIDDocument } from "did-resolver"
 import {
   DID_METHOD_PREFIX,
   BNS_CONTRACT_DEPLOY_TXID,
-  OFF_CHAIN_ADDR_VERSION,
+  versionByteToDidType,
 } from "../constants"
-import { DidType, StacksV2DID } from "../types"
+import { DidType, StacksNetworkDeployment, StacksV2DID } from "../types"
 import { stripHexPrefixIfPresent } from "./general"
 import { last, split } from "ramda"
 import { Right, Left, Either } from "monet"
 import { c32addressDecode } from "c32check/lib/address"
-import { AddressVersion } from "@stacks/transactions"
 const b58 = require("bs58")
 
 export const buildDidDoc = ({
@@ -58,10 +57,10 @@ export const parseStacksV2DID = (did: string): Either<Error, StacksV2DID> => {
     )
   }
 
-  return getDidType(address).map((type) => ({
+  return getDidType(address).map((metadata) => ({
     prefix: DID_METHOD_PREFIX,
     address,
-    type,
+    metadata,
     anchorTxId,
   }))
 }
@@ -88,23 +87,15 @@ export const isMigratedOnChainDid = (did: string | StacksV2DID) => {
  * corresponds to an on-chain DID or an off-chain DID (depending on the AddressVersion)
  */
 
-const getDidType = (addr: string): Either<Error, DidType> => {
+const getDidType = (
+  addr: string
+): Either<Error, { type: DidType; deployment: StacksNetworkDeployment }> => {
   const [versionByte, _] = c32addressDecode(addr)
+  const didTypeAndNetwork = versionByteToDidType[versionByte]
 
-  const onChainVersionBytes = [
-    AddressVersion.MainnetSingleSig,
-    AddressVersion.TestnetSingleSig,
-  ]
-
-  const type = onChainVersionBytes.includes(versionByte)
-    ? DidType.onChain
-    : versionByte === OFF_CHAIN_ADDR_VERSION
-    ? DidType.offChain
-    : undefined
-
-  if (!type) {
+  if (!didTypeAndNetwork) {
     return Left(new Error(`Unknown address version byte ${versionByte}`))
   }
 
-  return Right(type)
+  return Right(didTypeAndNetwork)
 }

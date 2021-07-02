@@ -2,18 +2,30 @@ import { buildDidDoc, encodeStacksV2Did } from "../src/utils/did"
 import { getResolver } from "../src/"
 import * as chai from "chai"
 import { expect } from "chai"
-import { testNames, testSubdomains } from './integration/data'
-import { AddressVersion, compressPublicKey, publicKeyToAddress, randomBytes } from "@stacks/transactions"
+import { testNames, testSubdomains } from "./integration/data"
+import {
+  compressPublicKey,
+  publicKeyToAddress,
+  randomBytes,
+} from "@stacks/transactions"
 import { getKeyPair } from "../src/registrar/utils"
-import { BNS_CONTRACT_DEPLOY_TXID } from "../src/constants"
+import {
+  BNS_CONTRACT_DEPLOY_TXID,
+  OffChainAddressVersion,
+} from "../src/constants"
 import { StacksMainnet, StacksMocknet } from "@stacks/network"
 
 const getTestDids = () => {
   try {
-    const { onChainDids, offChainDids } = require('./integration/artifacts.json')
+    const {
+      onChainDids,
+      offChainDids,
+    } = require("./integration/artifacts.json")
     return { onChainDids, offChainDids }
   } catch {
-    console.error('No DIDs found in artifacts.json, make sure to run yarn test:setup')
+    console.error(
+      "No DIDs found in artifacts.json, make sure to run yarn test:setup"
+    )
     process.exit(0)
   }
 }
@@ -27,24 +39,25 @@ const mocknetResolve = getResolver(new StacksMocknet())
 
 describe("did:stack:v2 resolver", () => {
   const { simple, revoked, rotated } = getTestDids().onChainDids
-   describe("On-chain Stacks v2 DIDs", () => {
-     it("correctly resolves newly created Stacks v2 DID", async () => {
-       return expect(mocknetResolve(simple)).to.eventually.deep.eq(
-         buildDidDoc({
-           did: simple,
-           publicKey: testNames.simple.keypair.publicKey.data.toString('hex')
-         })
-       )
-     })
+  describe("On-chain Stacks v2 DIDs", () => {
+    it("correctly resolves newly created Stacks v2 DID", async () => {
+      return expect(mocknetResolve(simple)).to.eventually.deep.eq(
+        buildDidDoc({
+          did: simple,
+          publicKey: testNames.simple.keypair.publicKey.data.toString("hex"),
+        })
+      )
+    })
 
     it("Should correctly resolve v2 DID after the key was rotated", async () => {
-       return expect(mocknetResolve(rotated)).to.eventually.deep.eq(
-         buildDidDoc({
-           did: rotated,
-           publicKey: testNames.rotated.newKeypair.publicKey.data.toString('hex')
-         })
-       )
-     })
+      return expect(mocknetResolve(rotated)).to.eventually.deep.eq(
+        buildDidDoc({
+          did: rotated,
+          publicKey:
+            testNames.rotated.newKeypair.publicKey.data.toString("hex"),
+        })
+      )
+    })
 
     it("Should fail to resolve v2 DID after name was revoked", async () => {
       return expect(mocknetResolve(revoked)).rejectedWith(
@@ -59,7 +72,9 @@ describe("did:stack:v2 resolver", () => {
       })
 
       const mainnetResolve = getResolver(new StacksMainnet())
-      return expect(mainnetResolve(testDid)).to.eventually.include({ id: testDid })
+      return expect(mainnetResolve(testDid)).to.eventually.include({
+        id: testDid,
+      })
     })
 
     it.skip("Should fail to resolve v2 DID based on expired name", async () => {
@@ -74,61 +89,63 @@ describe("did:stack:v2 resolver", () => {
         "Name bound to DID expired"
       )
     })
-   })
+  })
 
-   describe("Off-chain Stacks v2 DIDs", () => {
-     const { simple, rotated, revoked } = getTestDids().offChainDids
+  describe("Off-chain Stacks v2 DIDs", () => {
+    const { simple, rotated, revoked } = getTestDids().offChainDids
 
-     before(() => {
-       if (!simple || !revoked || !rotated) {
-         throw new Error('No DIDs found in artifacts.json, make sure to run setup.ts before running this test')
-       }
-     })
+    before(() => {
+      if (!simple || !revoked || !rotated) {
+        throw new Error(
+          "No DIDs found in artifacts.json, make sure to run setup.ts before running this test"
+        )
+      }
+    })
 
-     it("correctly resolve off-chain Stacks v2 DID", async () => {
-       const compressedPublicKey = compressPublicKey(
-         testSubdomains.simple.keypair.publicKey.data
-       )
+    it("correctly resolve off-chain Stacks v2 DID", async () => {
+      const compressedPublicKey = compressPublicKey(
+        testSubdomains.simple.keypair.publicKey.data
+      )
 
-       return expect(mocknetResolve(simple)).to.eventually.deep.eq(
-         buildDidDoc({
-           did: simple,
-           publicKey: compressedPublicKey.data.toString('hex')
-         })
-       )
-     })
+      return expect(mocknetResolve(simple)).to.eventually.deep.eq(
+        buildDidDoc({
+          did: simple,
+          publicKey: compressedPublicKey.data.toString("hex"),
+        })
+      )
+    })
 
-     it("correctly resolve a off-chain Stacks v2 DID after key rotation", async () => {
-       const compressedPublicKey = compressPublicKey(
-         testSubdomains.rotated.newKeypair.publicKey.data
-       )
+    it("correctly resolve a off-chain Stacks v2 DID after key rotation", async () => {
+      const compressedPublicKey = compressPublicKey(
+        testSubdomains.rotated.newKeypair.publicKey.data
+      )
 
-       return expect(mocknetResolve(rotated)).to.eventually.deep.eq(
-         buildDidDoc({
-           did: rotated,
-           publicKey: compressedPublicKey.data.toString('hex')
-         })
-       )
-     })
+      return expect(mocknetResolve(rotated)).to.eventually.deep.eq(
+        buildDidDoc({
+          did: rotated,
+          publicKey: compressedPublicKey.data.toString("hex"),
+        })
+      )
+    })
 
-     it("correctly fails to resolve a off-chain Stacks v2 DID after it was revoked", async () => {
-       return expect(mocknetResolve(revoked)).rejectedWith("PostResolution: failed to fetch latest public key")
-     })
+    it("correctly fails to resolve a off-chain Stacks v2 DID after it was revoked", async () => {
+      return expect(mocknetResolve(revoked)).rejectedWith(
+        "PostResolution: failed to fetch latest public key"
+      )
+    })
 
-     it("fails to resolve non-existent valid DID", async () => {
-       const mockTxId = randomBytes(32).toString("hex")
-       const randomAddress = publicKeyToAddress(
-         AddressVersion.TestnetSingleSig,
-         getKeyPair().publicKey
-       )
+    it("fails to resolve non-existent valid DID", async () => {
+      const mockTxId = randomBytes(32).toString("hex")
+      const randomAddress = publicKeyToAddress(
+        OffChainAddressVersion.testnet,
+        getKeyPair().publicKey
+      )
 
-       return expect(
-         mocknetResolve(
-           encodeStacksV2Did({ address: randomAddress, anchorTxId: mockTxId })
-         )
-       ).rejectedWith("could not find transaction by ID")
-     })
-   })
+      return expect(
+        mocknetResolve(
+          encodeStacksV2Did({ address: randomAddress, anchorTxId: mockTxId })
+        )
+      ).rejectedWith("could not find transaction by ID")
+    })
+  })
 })
-
-

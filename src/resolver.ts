@@ -129,7 +129,7 @@ export const getResolver = (
     promise(
       parseStacksV2DID(did)
         .map((parsedDID) =>
-          (isMigratedOnChainDid(parsedDID) // TODO Check if it matches network, i.e. mainnet vs testnet
+          (isMigratedOnChainDid(parsedDID)
             ? getPublicKeyForMigratedDid(parsedDID, stacksNetwork)
             : getPublicKeyForDID(parsedDID, stacksNetwork)
           ).pipe(

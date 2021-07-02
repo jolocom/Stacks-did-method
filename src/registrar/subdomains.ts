@@ -19,7 +19,7 @@ import {
 import { fetchZoneFileForName } from "../api"
 import { encodeStacksV2Did } from "../utils/did"
 import { parseZoneFileTXT } from "../utils/zonefile"
-import { OFF_CHAIN_ADDR_VERSION } from "../constants"
+import { OffChainAddressVersion, SUBDOMAIN_REVOKED_ADDR } from "../constants"
 const { parseZoneFile, makeZoneFile } = require("zone-file")
 
 export const registerSubdomain = async (
@@ -72,7 +72,7 @@ export const rekeySubdomain = async (
   const owner =
     subdomainOptions.newOwnerAddress ||
     publicKeyToAddress(
-      OFF_CHAIN_ADDR_VERSION,
+      OffChainAddressVersion.testnet,
       getPublicKey(subdomainOptions.newOwnerKeyPair.privateKey)
     )
 
@@ -112,7 +112,7 @@ export const rekeySubdomain = async (
   return encodeStacksV2Did({
     anchorTxId: txId as string,
     address: publicKeyToAddress(
-      OFF_CHAIN_ADDR_VERSION,
+      OffChainAddressVersion.testnet,
       getPublicKey(subdomainOptions.newOwnerKeyPair.privateKey)
     ),
   })
@@ -123,7 +123,7 @@ export const revokeSubdomain = async (
   nameOwnerKey: StacksKeyPair,
   network: StacksNetwork
 ) => {
-  const revokeAddr = "1111111111111111111114oLvT2"
+  const revokeAddr = SUBDOMAIN_REVOKED_ADDR
 
   const randomKey = getKeyPair()
   return rekeySubdomain(

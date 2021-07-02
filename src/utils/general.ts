@@ -2,7 +2,7 @@ import { AddressVersion } from "@stacks/transactions"
 import { c32addressDecode, c32address, c32ToB58 } from "c32check/lib/address"
 import { FutureInstance, reject, resolve } from "fluture"
 import { Either } from "monet"
-import { OFF_CHAIN_ADDR_VERSION } from "../constants"
+import { versionByteToDidType } from "../constants"
 
 export const stripHexPrefixIfPresent = (data: string) => {
   if (data.startsWith("0x")) return data.substr(2)
@@ -61,10 +61,9 @@ export const normalizeAddress = (address: string) => {
       return c32ToB58(address)
     }
 
-    if (
-      version === AddressVersion.TestnetSingleSig ||
-      version === OFF_CHAIN_ADDR_VERSION
-    ) {
+    const didMetadata = versionByteToDidType[version]
+
+    if (didMetadata) {
       return c32ToB58(c32address(AddressVersion.MainnetSingleSig, hash))
     }
 

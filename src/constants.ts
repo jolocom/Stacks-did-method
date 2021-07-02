@@ -1,3 +1,6 @@
+import { AddressVersion } from "@stacks/transactions"
+import { DidType, StacksNetworkDeployment } from "./types"
+
 export const DID_METHOD_PREFIX = "did:stack:v2"
 
 /*
@@ -23,6 +26,31 @@ export const BNS_CONTRACT_DEPLOY_TXID = {
 }
 
 /*
- * Version byte used to denote off-chain addresses. Relevant for off-chain DIDs
+ * Version byte used to denote off-chain DIDs. As documented here:
+ * @see https://github.com/jolocom/stacks-did-resolver/blob/main/docs/DID_Method_Spec.md#22-address-encoding
  */
-export const OFF_CHAIN_ADDR_VERSION = 0
+
+export const OffChainAddressVersion = {
+  mainnet: 17,
+  testnet: 18
+}
+
+export const versionByteToDidType = {
+  [AddressVersion.MainnetSingleSig]: {
+    type: DidType.onChain,
+    deployment: StacksNetworkDeployment.main
+  },
+  [AddressVersion.TestnetSingleSig]: {
+    type: DidType.onChain,
+    deployment: StacksNetworkDeployment.test
+  },
+  [OffChainAddressVersion.mainnet]: {
+    type: DidType.offChain,
+    deployment: StacksNetworkDeployment.main
+  },
+  [OffChainAddressVersion.testnet]: {
+    type: DidType.offChain,
+    deployment: StacksNetworkDeployment.test
+  }
+}
+

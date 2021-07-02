@@ -33,7 +33,10 @@ export const parseAndValidateTransaction =
       return Left(new Error("resolve failed, no contract_call in fetched tx"))
     }
 
-    if (!Object.values(BNS_ADDRESSES).includes(contractCallData.contract_id)) {
+    if (
+      !BNS_ADDRESSES[did.metadata.deployment] === contractCallData.contract_id
+    ) {
+      // TODO Update error message
       return Left(
         new Error(
           "Must reference TX to the BNS contract address, mainnet or testnet"
@@ -43,11 +46,11 @@ export const parseAndValidateTransaction =
 
     const calledFunction = contractCallData["function_name"]
 
-    if (!validDidInceptionEvents[did.type].includes(calledFunction)) {
+    if (!validDidInceptionEvents[did.metadata.type].includes(calledFunction)) {
       return Left(
         new Error(
           `TX ID references ${calledFunction} function call. Allowed methods are ${validDidInceptionEvents[
-            did.type
+            did.metadata.type
           ].toString()}`
         )
       )

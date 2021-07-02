@@ -160,7 +160,7 @@ export const setup = async () => {
 }
 
 export const getDIDFromName = (fqn: string, network: StacksNetwork) => {
-  return fetchNameInfo(network.coreApiUrl)(decodeFQN(fqn)).pipe(
+  return fetchNameInfo(network)(decodeFQN(fqn)).pipe(
     map(({ address, last_txid }) =>
       encodeStacksV2Did({ address, anchorTxId: last_txid })
     )

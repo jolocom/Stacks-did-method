@@ -3,9 +3,17 @@ export enum DidType {
   offChain = 'offChain'
 }
 
+export enum StacksNetworkDeployment {
+  test = 'test',
+  main = 'main'
+}
+
 export type StacksV2DID = {
   prefix: "did:stack:v2"
   address: string
   anchorTxId: string
-  type: DidType
+  metadata: {
+    type: DidType,
+    deployment: StacksNetworkDeployment
+  }
 }
