@@ -56,7 +56,7 @@ const postResolve = (
 ): FutureInstance<Error, { did: string; publicKey: string }> => {
   const fqn = decodeFQN(name)
 
-  return fetchNameInfo(network.coreApiUrl)(fqn).pipe(
+  return fetchNameInfo(network)(fqn).pipe(
     chain((currentInfo) => {
       if (currentInfo.status === "name-revoke") {
         return createRejectedFuture<Error, { did: string; publicKey: string }>(

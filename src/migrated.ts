@@ -20,13 +20,12 @@ import {
   reject,
 } from "fluture"
 import { StacksNetwork } from "@stacks/network"
-import { debug } from "./utils/dev"
 
 export const getPublicKeyForMigratedDid = ({ address, anchorTxId }: StacksV2DID, network: StacksNetwork) =>
   fetchNamesOwnedByAddress(network.coreApiUrl)(address)
     .pipe(map((names) => names[0])) // One principal can only map to one on-chain name, therefore we don't expect to receive multiple results here
     .pipe(map(decodeFQN))
-    .pipe(chain(fetchNameInfo(network.coreApiUrl)))
+    .pipe(chain(fetchNameInfo(network)))
     .pipe(
       chain((nameInfo) => {
         if (

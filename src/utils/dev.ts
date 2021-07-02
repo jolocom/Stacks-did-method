@@ -13,7 +13,7 @@ export const findValidNames =
       map(
         rMap((fqn: string) => {
           const { name, namespace } = decodeFQN(fqn)
-          return fetchNameInfo(network.coreApiUrl)({ name, namespace }).pipe(
+          return fetchNameInfo(network)({ name, namespace }).pipe(
             chain((info) => {
               if (onlyMigrated && info["last_txid"] !== "0x") {
                 return resolve(None())
