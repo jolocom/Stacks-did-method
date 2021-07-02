@@ -1,6 +1,8 @@
+import { AddressVersion } from "@stacks/transactions"
 import { c32addressDecode, c32address, c32ToB58 } from "c32check/lib/address"
 import { FutureInstance, reject, resolve } from "fluture"
 import { Either } from "monet"
+import { OFF_CHAIN_ADDR_VERSION } from "../constants"
 
 export const stripHexPrefixIfPresent = (data: string) => {
   if (data.startsWith("0x")) return data.substr(2)
@@ -47,19 +49,26 @@ export const decodeFQN = (fqdn: string): FQN => {
   }
 }
 
-// Given a testnet, or a mainnet c32 encoded address, will return the b58 encoded uncompressed address
+/*
+ * Converts a mainnet / testnet / off-chain c32 encoded address to a b58 encoded uncompressed address
+ *
+ */
+
 export const normalizeAddress = (address: string) => {
   try {
     const [version, hash] = c32addressDecode(address)
-    if (version === 22) {
+    if (version === AddressVersion.MainnetSingleSig) {
       return c32ToB58(address)
     }
 
-    if (version === 26) {
-      return c32ToB58(c32address(22, hash))
+    if (
+      version === AddressVersion.TestnetSingleSig ||
+      version === OFF_CHAIN_ADDR_VERSION
+    ) {
+      return c32ToB58(c32address(AddressVersion.MainnetSingleSig, hash))
     }
 
-    throw new Error("Unknown version number, " + version)
+    throw new Error("Address Version Byte not supported - " + version)
   } catch {
     return address
   }
