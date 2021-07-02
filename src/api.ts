@@ -87,21 +87,21 @@ type NameInfo = {
  * @returns {NameInfo} - the name state received from the BNS contract / Stacks node
  */
 
-export const fetchNameInfo = (apiEndpoint: string) => ({
+export const fetchNameInfo = (network: StacksNetwork) => ({
   name,
   namespace,
 }: {
   name: string
   namespace: string
 }): FutureInstance<Error, NameInfo> => {
-  const endpoint = `${apiEndpoint}/v1/names/${encodeFQN({ name, namespace })}`
+  const endpoint = `${network.coreApiUrl}/v1/names/${encodeFQN({ name, namespace })}`
 
   return fetchJSON<NameInfo>(endpoint).pipe(
     chain((res) => {
       return fetchNameInfoFromContract({
         name,
         namespace,
-        network: new StacksMocknet(),
+        network,
       }).pipe(map(
         someResult =>
           someResult.map(({ address, zonefile_hash }) => {
@@ -145,16 +145,16 @@ const fetchNameInfoFromContract = ({
   namespace: string
   network: StacksNetwork
 }): FutureInstance<Error, Maybe<NameResolveResult>> => {
-  const [contractAddress, contractName] = BNS_ADDRESSES.test.split(".")
+  const bnsDeployment = network.isMainnet() ?  BNS_ADDRESSES.main : BNS_ADDRESSES.test
+  const [contractAddress, contractName] = bnsDeployment.split('.')
 
   // TODO Use randomly generated addr every time?
-  const functionName = "name-resolve"
   const senderAddress = "ST2F4BK4GZH6YFBNHYDDGN4T1RKBA7DA1BJZPJEJJ"
 
   const options = {
     contractAddress,
     contractName,
-    functionName,
+    functionName: 'name-resolve',
     functionArgs: [bufferCVFromString(namespace), bufferCVFromString(name)],
     network,
     senderAddress,
