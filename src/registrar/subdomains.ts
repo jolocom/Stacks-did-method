@@ -8,10 +8,7 @@ import {
   waitForConfirmation,
   storeTokenFile,
 } from "./utils"
-import {
-  getPublicKey,
-  publicKeyToAddress,
-} from "@stacks/transactions"
+import { getPublicKey, publicKeyToAddress } from "@stacks/transactions"
 import { promise } from "fluture"
 import {
   makeProfileZoneFile,

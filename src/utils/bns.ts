@@ -2,7 +2,7 @@ import { StacksNetwork } from "@stacks/network"
 import { chain, map } from "fluture"
 import { Right } from "monet"
 import { fetchTransactionById, fetchZoneFileForName } from "../api"
-import { StacksV2DID } from "../types"
+import { DidType, StacksV2DID } from "../types"
 import { debug } from "./dev"
 import { eitherToFuture } from "./general"
 import { parseAndValidateTransaction } from "./transactions"
@@ -22,11 +22,11 @@ const getZonefileForDid = (did: StacksV2DID, network: StacksNetwork) =>
     .pipe(map(parseAndValidateTransaction))
     .pipe(chain(eitherToFuture))
     .pipe(
-      chain(({ subdomainInception, ...nameInfo }) =>
+      chain(({ ...nameInfo }) =>
         fetchZoneFileForName(network.coreApiUrl)(nameInfo)
           .pipe(
             map((zonefile) =>
-              subdomainInception
+              did.type === DidType.offChain
                 ? findSubdomainZonefile(zonefile, did.address)
                 : Right({
                     zonefile,

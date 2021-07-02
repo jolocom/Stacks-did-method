@@ -10,14 +10,12 @@ export type TransactionArguments = {
   name: string
   namespace: string
   zonefileHash: string
-  subdomainInception: boolean
 }
 
 export const parseAndValidateTransaction = (
   tx: any
 ): Either<Error, TransactionArguments> => {
   const validOnChainDidInceptionEvents = ["name-register", "name-import"]
-
   const validOffChainDidInceptionEvents = ["name-import", "name-update"]
 
   if (tx.tx_status !== "success") {
@@ -25,6 +23,7 @@ export const parseAndValidateTransaction = (
       new Error(`Invalid TX status for ${tx.tx_id}, expected success`)
     )
   }
+
   const contractCallData = tx.contract_call
 
   if (!contractCallData) {
@@ -41,36 +40,23 @@ export const parseAndValidateTransaction = (
 
   const calledFunction = contractCallData["function_name"]
 
-  return extractContractCallArgs(contractCallData.function_args).map((data) => {
-    if (validOnChainDidInceptionEvents.includes(calledFunction)) {
-      return {
-        ...data,
-        subdomainInception: false,
-      }
-    } else if (validOffChainDidInceptionEvents.includes(calledFunction)) {
-      return {
-        ...data,
-        subdomainInception: true,
-      }
-    } else {
-      return Left(
-        new Error(
-          `call ${calledFunction} not allowed. supported methods are ${[
-            ...validOffChainDidInceptionEvents,
-            ...validOffChainDidInceptionEvents,
-          ].toString()}`
-        )
+  if (
+    ![
+      ...validOnChainDidInceptionEvents,
+      ...validOffChainDidInceptionEvents,
+    ].includes(calledFunction)
+  ) {
+    return Left(
+      new Error(
+        `call ${calledFunction} not allowed. supported methods are ${[
+          ...validOffChainDidInceptionEvents,
+          ...validOffChainDidInceptionEvents,
+        ].toString()}`
       )
-    }
-  }) as Either<
-    Error,
-    {
-      name: string
-      namespace: string
-      subdomainInception: boolean
-      zonefileHash: string
-    }
-  >
+    )
+  }
+
+  return extractContractCallArgs(contractCallData.function_args)
 }
 
 /**
