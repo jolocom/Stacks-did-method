@@ -10,7 +10,6 @@ import {
 } from "./utils"
 import {
   getPublicKey,
-  AddressVersion,
   publicKeyToAddress,
 } from "@stacks/transactions"
 import { promise } from "fluture"
@@ -23,6 +22,7 @@ import {
 import { fetchZoneFileForName } from "../api"
 import { encodeStacksV2Did } from "../utils/did"
 import { parseZoneFileTXT } from "../utils/zonefile"
+import { OFF_CHAIN_ADDR_VERSION } from "../constants"
 const { parseZoneFile, makeZoneFile } = require("zone-file")
 
 export const registerSubdomain = async (
@@ -65,8 +65,6 @@ export const rekeySubdomain = async (
     })
   )
 
-  console.log(zf)
-
   const currentZf = parseZoneFile(zf)
 
   const subdomainZF = await buildSubdomainZoneFile(
@@ -77,7 +75,7 @@ export const rekeySubdomain = async (
   const owner =
     subdomainOptions.newOwnerAddress ||
     publicKeyToAddress(
-      AddressVersion.TestnetSingleSig,
+      OFF_CHAIN_ADDR_VERSION,
       getPublicKey(subdomainOptions.newOwnerKeyPair.privateKey)
     )
 
@@ -117,7 +115,7 @@ export const rekeySubdomain = async (
   return encodeStacksV2Did({
     anchorTxId: txId as string,
     address: publicKeyToAddress(
-      AddressVersion.TestnetSingleSig,
+      0,
       getPublicKey(subdomainOptions.newOwnerKeyPair.privateKey)
     ),
   })
