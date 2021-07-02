@@ -112,7 +112,7 @@ export const rekeySubdomain = async (
   return encodeStacksV2Did({
     anchorTxId: txId as string,
     address: publicKeyToAddress(
-      0,
+      OFF_CHAIN_ADDR_VERSION,
       getPublicKey(subdomainOptions.newOwnerKeyPair.privateKey)
     ),
   })

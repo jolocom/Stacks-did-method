@@ -3,6 +3,7 @@ import { hexToCV, cvToValue } from "@stacks/transactions"
 import { hexToAscii, stripHexPrefixIfPresent } from "./general"
 import { BNS_ADDRESSES } from "../constants"
 import { Left, Right, Either } from "monet"
+import { DidType, StacksV2DID } from "../types"
 
 //TODO Find type for tx json
 
@@ -12,52 +13,48 @@ export type TransactionArguments = {
   zonefileHash: string
 }
 
-export const parseAndValidateTransaction = (
-  tx: any
-): Either<Error, TransactionArguments> => {
-  const validOnChainDidInceptionEvents = ["name-register", "name-import"]
-  const validOffChainDidInceptionEvents = ["name-import", "name-update"]
+export const parseAndValidateTransaction =
+  (did: StacksV2DID) =>
+  (tx: any): Either<Error, TransactionArguments> => {
+    const validDidInceptionEvents = {
+      [DidType.offChain]: ["name-import", "name-update"],
+      [DidType.onChain]: ["name-register", "name-import"],
+    }
 
-  if (tx.tx_status !== "success") {
-    return Left(
-      new Error(`Invalid TX status for ${tx.tx_id}, expected success`)
-    )
-  }
-
-  const contractCallData = tx.contract_call
-
-  if (!contractCallData) {
-    return Left(new Error("resolve failed, no contract_call in fetched tx"))
-  }
-
-  if (!Object.values(BNS_ADDRESSES).includes(contractCallData.contract_id)) {
-    return Left(
-      new Error(
-        "Must reference TX to the BNS contract address, mainnet or testnet"
+    if (tx.tx_status !== "success") {
+      return Left(
+        new Error(`Invalid TX status for ${tx.tx_id}, expected success`)
       )
-    )
-  }
+    }
 
-  const calledFunction = contractCallData["function_name"]
+    const contractCallData = tx.contract_call
 
-  if (
-    ![
-      ...validOnChainDidInceptionEvents,
-      ...validOffChainDidInceptionEvents,
-    ].includes(calledFunction)
-  ) {
-    return Left(
-      new Error(
-        `call ${calledFunction} not allowed. supported methods are ${[
-          ...validOffChainDidInceptionEvents,
-          ...validOffChainDidInceptionEvents,
-        ].toString()}`
+    if (!contractCallData) {
+      return Left(new Error("resolve failed, no contract_call in fetched tx"))
+    }
+
+    if (!Object.values(BNS_ADDRESSES).includes(contractCallData.contract_id)) {
+      return Left(
+        new Error(
+          "Must reference TX to the BNS contract address, mainnet or testnet"
+        )
       )
-    )
-  }
+    }
 
-  return extractContractCallArgs(contractCallData.function_args)
-}
+    const calledFunction = contractCallData["function_name"]
+
+    if (!validDidInceptionEvents[did.type].includes(calledFunction)) {
+      return Left(
+        new Error(
+          `TX ID references ${calledFunction} function call. Allowed methods are ${validDidInceptionEvents[
+            did.type
+          ].toString()}`
+        )
+      )
+    }
+
+    return extractContractCallArgs(contractCallData.function_args)
+  }
 
 /**
  * Extracts the namespace, name, and zonefile-hash arguments from a name-register / name-update TX
