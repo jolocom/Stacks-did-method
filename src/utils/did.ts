@@ -1,9 +1,15 @@
 import { DIDDocument } from "did-resolver"
-import { DID_METHOD_PREFIX, BNS_CONTRACT_DEPLOY_TXID } from "../constants"
-import { StacksV2DID } from "../types"
+import {
+  DID_METHOD_PREFIX,
+  BNS_CONTRACT_DEPLOY_TXID,
+  OFF_CHAIN_ADDR_VERSION,
+} from "../constants"
+import { DidType, StacksV2DID } from "../types"
 import { stripHexPrefixIfPresent } from "./general"
 import { last, split } from "ramda"
 import { Right, Left, Either } from "monet"
+import { c32addressDecode } from "c32check/lib/address"
+import { AddressVersion } from "@stacks/transactions"
 const b58 = require("bs58")
 
 export const buildDidDoc = ({
@@ -52,12 +58,21 @@ export const parseStacksV2DID = (did: string): Either<Error, StacksV2DID> => {
     )
   }
 
-  return Right({
+  return getDidType(address).map((type) => ({
     prefix: DID_METHOD_PREFIX,
     address,
+    type,
     anchorTxId,
-  })
+  }))
 }
+
+export const encodeStacksV2Did = (did: {
+  address: string
+  anchorTxId: string
+}) =>
+  `${DID_METHOD_PREFIX}:${did.address}-${stripHexPrefixIfPresent(
+    did.anchorTxId
+  )}`
 
 export const isMigratedOnChainDid = (did: string | StacksV2DID) => {
   if (typeof did === "string") {
@@ -68,7 +83,28 @@ export const isMigratedOnChainDid = (did: string | StacksV2DID) => {
   return Object.values(BNS_CONTRACT_DEPLOY_TXID).includes(did.anchorTxId)
 }
 
-export const encodeStacksV2Did = (did: Omit<StacksV2DID, "prefix">) =>
-  `${DID_METHOD_PREFIX}:${did.address}-${stripHexPrefixIfPresent(
-    did.anchorTxId
-  )}`
+/**
+ * Helper function which parses a c32 encoded address and determines whether the address
+ * corresponds to an on-chain DID or an off-chain DID (depending on the AddressVersion)
+ */
+
+const getDidType = (addr: string): Either<Error, DidType> => {
+  const [versionByte, _] = c32addressDecode(addr)
+
+  const onChainVersionBytes = [
+    AddressVersion.MainnetSingleSig,
+    AddressVersion.TestnetSingleSig,
+  ]
+
+  const type = onChainVersionBytes.includes(versionByte)
+    ? DidType.onChain
+    : versionByte === OFF_CHAIN_ADDR_VERSION
+    ? DidType.offChain
+    : undefined
+
+  if (!type) {
+    return Left(new Error(`Unknown address version byte ${versionByte}`))
+  }
+
+  return Right(type)
+}

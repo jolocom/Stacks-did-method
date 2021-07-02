@@ -1,5 +1,5 @@
+import { StacksMainnet } from '@stacks/network'
 import { getResolver } from './resolver'
 
-// const resolve = getResolver()
-
 export { getResolver }
+export const resolve = getResolver()

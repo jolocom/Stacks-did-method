@@ -29,8 +29,8 @@ import {
   signProfileToken,
   wrapProfileToken,
 } from "@stacks/profile"
-import { STX_TO_BURN } from "../constants"
 import { encodeStacksV2Did } from "../utils/did"
+import { STX_TO_BURN } from "./constants"
 
 const preorderName = (
   name: string,
