@@ -38,8 +38,7 @@ const getPublicKeyForDID = (
   network: StacksNetwork
 ): FutureInstance<Error, { publicKey: string; name: string }> =>
   //@ts-ignore
-  mapDidToBNSName(did, network)
-  .pipe(
+  mapDidToBNSName(did, network).pipe(
     chain(({ name, namespace, subdomain, tokenUrl }) =>
       fetchAndVerifySignedToken(tokenUrl, did.address).pipe(
         map((key) => ({
@@ -101,8 +100,7 @@ const postResolve = (
               })
                 .flatMap(parseZoneFileAndExtractNameinfo)
                 .map((nameInfo) => ({ ...nameInfo, owner }))
-            }
-            )
+            })
           )
         )
         .pipe(chain((eith) => eitherToFuture(eith)))
@@ -118,7 +116,8 @@ const postResolve = (
                 `PostResolution: failed to fetch latest public key, error: ${err.message}`
               )
           )
-        ).pipe(map((publicKey) => ({ publicKey, did })))
+        )
+        .pipe(map((publicKey) => ({ publicKey, did })))
     })
   )
 }
@@ -134,13 +133,14 @@ export const getResolver = (
             ? getPublicKeyForMigratedDid(parsedDID, stacksNetwork)
             : getPublicKeyForDID(parsedDID, stacksNetwork)
           ).pipe(
-            chain(({ name }) => postResolve(name, did, stacksNetwork).pipe(map(buildDidDoc)))
+            chain(({ name }) =>
+              postResolve(name, did, stacksNetwork).pipe(map(buildDidDoc))
+            )
           )
         )
         .fold((e) => createRejectedFuture<Error, DIDDocument>(e), identity)
     )
 
-    // @TODO integrate with DID resolver
-    return resolve
+  // @TODO integrate with DID resolver
+  return resolve
 }
-

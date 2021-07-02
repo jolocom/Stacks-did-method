@@ -11,9 +11,8 @@ import {
   getAddressFromPublicKey,
   TransactionVersion,
 } from "@stacks/transactions"
-import { priceFunction, lifetime } from "./constants"
+import { priceFunction, lifetime, STX_TO_BURN } from "./constants"
 import { promise } from "fluture"
-import { STX_TO_BURN } from "../constants"
 
 const preorderNamespace = async (
   namespace: string,

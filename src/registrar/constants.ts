@@ -25,3 +25,5 @@ export const priceFunction: PriceFunction = {
 }
 
 export const lifetime = new BN(10000)
+
+export const STX_TO_BURN = new BN(300000000000000)
