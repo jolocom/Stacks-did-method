@@ -51,8 +51,8 @@ export const getPublicKeyForMigratedDid = ({ address }: StacksV2DID, network: St
         if (normalizeAddress(address) !== normalizeAddress(address)) {
           return reject(
             new DIDResolutionError(
-              DIDResolutionErrorCodes.OwnerMissmatch,
-              'Migrated BNS name owner does not match DID'
+              DIDResolutionErrorCodes.MigratedOwnerMissmatch,
+              'BNS name owner at time of migration does not match DID'
             )
           )
         }

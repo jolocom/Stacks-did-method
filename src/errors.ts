@@ -8,7 +8,8 @@ export enum DIDParseErrorCodes {
 
 export enum DIDResolutionErrorCodes {
     InvalidMigrationTx = 'InvalidMigrationTx',
-    OwnerMissmatch = 'OwnerMissmatch', // TODO Elaborate on this?
+    NoMigratedNamesFound = 'NoMigratedNamesFound',
+    MigratedOwnerMissmatch = 'MigratedOwnerMissmatch',
     InvalidAnchorTx = 'InvalidAnchorTx',
     MissingZoneFile = 'MissingZoneFile',
     InvalidZonefile = 'InvalidZonefile',

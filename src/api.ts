@@ -16,9 +16,13 @@ import {
   ClarityValue,
   ReadOnlyFunctionOptions,
   cvToJSON,
+  getAddressFromPublicKey,
+  getPublicKey,
+  makeRandomPrivKey,
 } from "@stacks/transactions"
-import { StacksMocknet, StacksNetwork } from "@stacks/network"
+import { StacksNetwork } from "@stacks/network"
 import { Maybe, None, Some } from "monet"
+import { DIDResolutionError, DIDResolutionErrorCodes } from "./errors"
 
 const fetchJSON = <T>(endpoint: string): FutureInstance<Error, T> => {
   return encaseP<Error, T, string>(() =>
@@ -49,6 +53,8 @@ export const fetchZoneFileForName =  (apiEndpoint: string) => (args: {
 
 /**
  * Given a Stacks Address, will return an array of BNS names owned by it.
+ * @note One principal can only map to one on-chain name, therefore we don't expect to receive multiple results here
+ *
  * @param {String} address - a c32 encoded Stacks Address
  *
  * @returns {FutureInstance<Error, String[]>} - an array of names owned by the address.
@@ -62,10 +68,9 @@ export const fetchNameOwnedByAddress = (apiEndpoint: string) => (
     .pipe(map(prop("names")))
     .pipe(
       chain((names) =>
-        // One principal can only map to one on-chain name, therefore we don't expect to receive multiple results here
         names?.length === 1
           ? resolve(names[0])
-          : reject(new Error("No names associated with DID"))
+        : reject(new DIDResolutionError(DIDResolutionErrorCodes.NoMigratedNamesFound))
       )
     )
 
@@ -148,8 +153,9 @@ const fetchNameInfoFromContract = ({
   const bnsDeployment = network.isMainnet() ?  BNS_ADDRESSES.main : BNS_ADDRESSES.test
   const [contractAddress, contractName] = bnsDeployment.split('.')
 
-  // TODO Use randomly generated addr every time?
-  const senderAddress = "ST2F4BK4GZH6YFBNHYDDGN4T1RKBA7DA1BJZPJEJJ"
+  const senderAddress = getAddressFromPublicKey(
+    getPublicKey(makeRandomPrivKey()).data
+  )
 
   const options = {
     contractAddress,
@@ -189,14 +195,28 @@ type TxStatus =
  * @returns the corresponding stacks transaction if found
  */
 
+type SucccessFetchTxResponse = {
+  tx_id: string,
+  tx_status: TxStatus,
+  [k: string]: any
+}
+
+type FetchTransactionResponse = SucccessFetchTxResponse | {
+  error: string
+}
+
 export const fetchTransactionById = (apiEndpoint: string) => (txId: string) => {
   const endpoint = `${apiEndpoint}/extended/v1/tx/${txId}?event_offset=0&event_limit=96`
-  return fetchJSON<{ tx_id: string; tx_status: TxStatus }>(endpoint).pipe(
+  return fetchJSON<FetchTransactionResponse>(endpoint).pipe(
     chain((res) => {
-      if (res.tx_id && res.tx_status) {
-        return resolve(res)
+      if (res.error) {
+        return reject(new DIDResolutionError(
+          DIDResolutionErrorCodes.InvalidAnchorTx,
+          res.error
+        ))
+      } else {
+        return resolve(res as SucccessFetchTxResponse)
       }
-      return reject(new Error((res as any).error))
     })
   )
 }
