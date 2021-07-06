@@ -17,9 +17,10 @@ import {
   wrapProfileToken,
 } from "@stacks/profile"
 import { fetchZoneFileForName } from "../api"
-import { encodeStacksV2Did } from "../utils/did"
+import { encodeStacksV2Did } from "../utils/did/did"
 import { parseZoneFileTXT } from "../utils/zonefile"
 import { OffChainAddressVersion, SUBDOMAIN_REVOKED_ADDR } from "../constants"
+import { identity } from "ramda"
 const { parseZoneFile, makeZoneFile } = require("zone-file")
 
 export const registerSubdomain = async (
@@ -50,7 +51,10 @@ export const rekeySubdomain = async (
   },
   network: StacksNetwork
 ) => {
-  const { name, namespace, subdomain } = decodeFQN(fqn)
+  const { name, namespace, subdomain } = decodeFQN(fqn).fold(
+    () => ({ name: "", namespace: "", subdomain: "" }),
+    identity
+  )
   if (!subdomain) {
     throw new Error("provided fqn must include subdomain")
   }

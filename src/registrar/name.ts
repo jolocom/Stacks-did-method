@@ -5,7 +5,6 @@ import {
   buildRevokeNameTx,
 } from "@stacks/bns"
 import { StacksNetwork } from "@stacks/network"
-const { parseZoneFile, makeZoneFile } = require("zone-file")
 import { encodeFQN } from "../utils/general"
 import {
   StacksKeyPair,
@@ -29,7 +28,7 @@ import {
   signProfileToken,
   wrapProfileToken,
 } from "@stacks/profile"
-import { encodeStacksV2Did } from "../utils/did"
+import { encodeStacksV2Did } from "../utils/did/did"
 import { STX_TO_BURN } from "./constants"
 
 const preorderName = (

@@ -1,7 +1,7 @@
 import { AddressVersion } from "@stacks/transactions"
 import { c32addressDecode, c32address, c32ToB58 } from "c32check/lib/address"
 import { FutureInstance, reject, resolve } from "fluture"
-import { Either } from "monet"
+import { Either, Left, Maybe, None, Right, Some } from "monet"
 import { versionByteToDidType } from "../constants"
 
 export const stripHexPrefixIfPresent = (data: string) => {
@@ -9,9 +9,6 @@ export const stripHexPrefixIfPresent = (data: string) => {
 
   return data
 }
-
-export const hexToAscii = (hex: string) =>
-  Buffer.from(stripHexPrefixIfPresent(hex), "hex").toString("ascii")
 
 export const encodeFQN = (args: {
   name: string
@@ -28,27 +25,27 @@ type FQN = {
   subdomain?: string
 }
 
-export const decodeFQN = (fqdn: string): FQN => {
+export const decodeFQN = (fqdn: string): Either<Error, FQN> => {
   const nameParts = fqdn.split(".")
-  if (nameParts.length > 2) {
-    const subdomain = nameParts[0]
-    const name = nameParts[1]
-    const namespace = nameParts[2]
-    return {
+  if (nameParts.length < 2) {
+    return Left(new Error("Invalid FQN")) // TODO Error Code
+  }
+
+  if (nameParts.length === 3) {
+    const [subdomain, name, namespace] = nameParts
+    return Right({
       subdomain,
       name,
       namespace,
-    }
+    })
   } else {
-    const name = nameParts[0]
-    const namespace = nameParts[1]
-    return {
+    const [name, namespace] = nameParts
+    return Right({
       name,
       namespace,
-    }
+    })
   }
 }
-
 /*
  * Converts a mainnet / testnet / off-chain c32 encoded address to a b58 encoded uncompressed address
  *

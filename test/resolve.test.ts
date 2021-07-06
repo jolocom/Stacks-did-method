@@ -1,4 +1,5 @@
-import { buildDidDoc, encodeStacksV2Did } from "../src/utils/did"
+import {  encodeStacksV2Did } from "../src/utils/did/did"
+import { buildDidDoc } from '../src/utils/did/didDoc'
 import { getResolver } from "../src/"
 import * as chai from "chai"
 import { expect } from "chai"
@@ -14,6 +15,7 @@ import {
   OffChainAddressVersion,
 } from "../src/constants"
 import { StacksMainnet, StacksMocknet } from "@stacks/network"
+import { identity } from "ramda"
 
 const getTestDids = () => {
   try {
@@ -61,7 +63,7 @@ describe("did:stack:v2 resolver", () => {
 
     it("Should fail to resolve v2 DID after name was revoked", async () => {
       return expect(mocknetResolve(revoked)).rejectedWith(
-        "Name bound to DID was revoked"
+        "DIDDeactivated: Underlying BNS name revoked"
       )
     })
     it("Should correctly resolve v2 DID based on migrated name", async () => {
@@ -69,7 +71,7 @@ describe("did:stack:v2 resolver", () => {
       const testDid = encodeStacksV2Did({
         address: testAddr,
         anchorTxId: BNS_CONTRACT_DEPLOY_TXID.main,
-      })
+      }).cata(_ => '', identity)
 
       const mainnetResolve = getResolver(new StacksMainnet())
       return expect(mainnetResolve(testDid)).to.eventually.include({
@@ -82,9 +84,10 @@ describe("did:stack:v2 resolver", () => {
       const testDid = encodeStacksV2Did({
         address: testAddr,
         anchorTxId: BNS_CONTRACT_DEPLOY_TXID.main,
-      })
+      }).cata(_ => '', identity)
 
       const mainnetResolve = getResolver(new StacksMainnet())
+
       return expect(mainnetResolve(testDid)).rejectedWith(
         "Name bound to DID expired"
       )
@@ -130,7 +133,7 @@ describe("did:stack:v2 resolver", () => {
 
     it("correctly fails to resolve a off-chain Stacks v2 DID after it was revoked", async () => {
       return expect(mocknetResolve(revoked)).rejectedWith(
-        "PostResolution: failed to fetch latest public key"
+        "InvalidSignedProfileToken: Token issuer public key does not match the verifying value"
       )
     })
 
@@ -143,7 +146,7 @@ describe("did:stack:v2 resolver", () => {
 
       return expect(
         mocknetResolve(
-          encodeStacksV2Did({ address: randomAddress, anchorTxId: mockTxId })
+          encodeStacksV2Did({ address: randomAddress, anchorTxId: mockTxId }).cata(_ => '', identity)
         )
       ).rejectedWith("could not find transaction by ID")
     })

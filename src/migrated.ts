@@ -1,6 +1,7 @@
 import { identity } from "ramda"
 import {
   decodeFQN,
+  eitherToFuture,
   encodeFQN,
   normalizeAddress
 } from "./utils/general"
@@ -12,7 +13,7 @@ import { StacksV2DID } from "./types"
 
 import {
   fetchNameInfo,
-  fetchNamesOwnedByAddress,
+  fetchNameOwnedByAddress,
 } from "./api"
 import {
   chain,
@@ -20,37 +21,45 @@ import {
   reject,
 } from "fluture"
 import { StacksNetwork } from "@stacks/network"
+import { DIDResolutionError, DIDResolutionErrorCodes } from "./errors"
 
-export const getPublicKeyForMigratedDid = ({ address, anchorTxId }: StacksV2DID, network: StacksNetwork) =>
-  fetchNamesOwnedByAddress(network.coreApiUrl)(address)
-    .pipe(map((names) => names[0])) // One principal can only map to one on-chain name, therefore we don't expect to receive multiple results here
+// TODO Define and export an utility to derive a V2 Stacks DID given a V1 DID
+// TODO This resolution step needs to happen via a proxy call @block.
+
+export const getPublicKeyForMigratedDid = ({ address }: StacksV2DID, network: StacksNetwork) =>
+  fetchNameOwnedByAddress(network.coreApiUrl)(address)
     .pipe(map(decodeFQN))
+    .pipe(chain(eitherToFuture))
     .pipe(chain(fetchNameInfo(network)))
     .pipe(
-      chain((nameInfo) => {
+      chain(({last_txid, status, address, zonefile}) => {
+        // Names which were migrated list 0x as their registration transaction ID
+        // and name-register as their migration transaction
+        const migrateddTxId = '0x'
+        const migratedContractCall = 'name-register'
         if (
-          nameInfo.last_txid === "0x" &&
-          nameInfo.status !== "name-register"
+          last_txid === migrateddTxId &&
+          status !== migratedContractCall
         ) {
-          // TODO What if a migrated name has since been updated? How do we handle this case?
           return reject(
-            new Error(
-              `Verifying name-record for migrated DID failed, expected last_txid to be 0x, got ${anchorTxId}`
+            new DIDResolutionError(
+              DIDResolutionErrorCodes.InvalidMigrationTx
             )
           )
         }
 
-        if (normalizeAddress(nameInfo.address) !== normalizeAddress(address)) {
+        if (normalizeAddress(address) !== normalizeAddress(address)) {
           return reject(
-            new Error(
-              `Verifying name-record failed, expected name owner to match address, got ${address}`
+            new DIDResolutionError(
+              DIDResolutionErrorCodes.MigratedOwnerMissmatch,
+              'BNS name owner at time of migration does not match DID'
             )
           )
         }
 
-        return parseZoneFileAndExtractNameinfo(nameInfo.zonefile)
+        return parseZoneFileAndExtractNameinfo(zonefile)
           .map(({ name, namespace, subdomain }) =>
-               getPublicKeyUsingZoneFile(nameInfo.zonefile, nameInfo.address)
+               getPublicKeyUsingZoneFile(zonefile, address)
               .pipe(
                 map((key) => ({
                     name: encodeFQN({

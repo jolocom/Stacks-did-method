@@ -1,15 +1,11 @@
-import { extractTokenFileUrl, fetchAndVerifySignedToken } from "./signedToken"
-import {
-  decodeFQN,
-  eitherToFuture,
-  encodeFQN,
-  normalizeAddress,
-} from "./general"
+import { getTokenFileUrl } from "@stacks/profile"
+import { fetchAndVerifySignedToken } from "./signedToken"
+import { decodeFQN, eitherToFuture, normalizeAddress } from "./general"
 import "isomorphic-fetch"
 import { Right, Left, Either } from "monet"
 import { chain } from "fluture"
+import { DIDResolutionError, DIDResolutionErrorCodes } from "../errors"
 const { parseZoneFile } = require("zone-file")
-const b58 = require("bs58")
 
 export const ensureZonefileMatchesName = ({
   zonefile,
@@ -23,27 +19,23 @@ export const ensureZonefileMatchesName = ({
   subdomain?: string
 }): Either<Error, string> => {
   const parsedZoneFile = parseZoneFile(zonefile)
-  const origin = decodeFQN(parsedZoneFile["$origin"])
 
-  if (
-    origin.name !== name ||
-    origin.namespace !== namespace ||
-    origin.subdomain !== subdomain
-  ) {
-    return Left(
-      new Error(
-        `Wrong zonefile, zf origin - ${JSON.stringify(
-          origin
-        )}, looking for ${encodeFQN({
-          name,
-          namespace,
-          subdomain,
-        })}`
+  return decodeFQN(parsedZoneFile["$origin"]).flatMap((origin) => {
+    if (
+      origin.name !== name ||
+      origin.namespace !== namespace ||
+      origin.subdomain !== subdomain
+    ) {
+      return Left(
+        new DIDResolutionError(
+          DIDResolutionErrorCodes.InvalidZonefile,
+          "Zone file $ORIGIN does not match expected BNS name"
+        )
       )
-    )
-  }
+    }
 
-  return Right(zonefile)
+    return Right(zonefile)
+  })
 }
 
 export const parseZoneFileTXT = (entries: string[]) =>
@@ -84,10 +76,15 @@ export const findSubdomainZoneFileByName = (
     }
   }
 
-  return Left(new Error(`No zonefile for subdomain ${subdomain} found`))
+  return Left(
+    new DIDResolutionError(
+      DIDResolutionErrorCodes.MissingZoneFile,
+      "No zone file found for subdomain"
+    )
+  )
 }
 
-export const findSubdomainZonefile = (
+export const findSubdomainZonefileByOwner = (
   nameZonefile: string,
   owner: string
 ): Either<
@@ -115,19 +112,26 @@ export const findSubdomainZonefile = (
     }
   }
 
-  return Left(new Error(`No zonefile for subdomain owned by ${owner} found`))
+  return Left(
+    new DIDResolutionError(
+      DIDResolutionErrorCodes.MissingZoneFile,
+      "No zone file found for subdomain"
+    )
+  )
 }
 
 export const parseZoneFileAndExtractNameinfo = (zonefile: string) => {
   const parsedZf = parseZoneFile(zonefile)
-  const { name, namespace, subdomain } = decodeFQN(parsedZf["$origin"])
 
-  return extractTokenFileUrl(zonefile).map((url) => ({
-    name,
-    namespace,
-    subdomain,
-    tokenUrl: url,
-  }))
+  return decodeFQN(parsedZf["$origin"]).flatMap(
+    ({ name, namespace, subdomain }) =>
+      extractTokenFileUrl(zonefile).map((url) => ({
+        name,
+        namespace,
+        subdomain,
+        tokenUrl: url,
+      }))
+  )
 }
 
 export const getPublicKeyUsingZoneFile = (zf: string, ownerAddress: string) =>
@@ -136,3 +140,19 @@ export const getPublicKeyUsingZoneFile = (zf: string, ownerAddress: string) =>
       fetchAndVerifySignedToken(tokenUrl, normalizeAddress(ownerAddress))
     )
   )
+
+const extractTokenFileUrl = (zoneFile: string): Either<Error, string> => {
+  try {
+    const url = getTokenFileUrl(parseZoneFile(zoneFile))
+    return url
+      ? Right(url)
+      : Left(
+          new DIDResolutionError(
+            DIDResolutionErrorCodes.InvalidZonefile,
+            "Missing URI resource record in zone file"
+          )
+        )
+  } catch (e) {
+    return Left(e)
+  }
+}
