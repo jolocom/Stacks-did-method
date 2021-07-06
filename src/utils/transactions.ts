@@ -1,18 +1,21 @@
 import { compose } from "ramda"
 import { hexToCV, cvToValue } from "@stacks/transactions"
-import { hexToAscii, stripHexPrefixIfPresent } from "./general"
+import { stripHexPrefixIfPresent } from "./general"
 import { BNS_ADDRESSES } from "../constants"
 import { Left, Right, Either } from "monet"
 import { DidType, StacksV2DID } from "../types"
+import { DIDResolutionError, DIDResolutionErrorCodes } from "../errors"
 
-//TODO Find type for tx json
+const hexToAscii = (hex: string) =>
+  Buffer.from(stripHexPrefixIfPresent(hex), "hex").toString("ascii")
 
-export type TransactionArguments = {
+type TransactionArguments = {
   name: string
   namespace: string
   zonefileHash: string
 }
 
+// TODO Differentiate between the different reasons for an invalid transaction
 export const parseAndValidateTransaction =
   (did: StacksV2DID) =>
   (tx: any): Either<Error, TransactionArguments> => {
@@ -23,23 +26,31 @@ export const parseAndValidateTransaction =
 
     if (tx.tx_status !== "success") {
       return Left(
-        new Error(`Invalid TX status for ${tx.tx_id}, expected success`)
+        new DIDResolutionError(
+          DIDResolutionErrorCodes.InvalidAnchorTx,
+          'Name anchor transaction status must be "success"'
+        )
       )
     }
 
     const contractCallData = tx.contract_call
 
     if (!contractCallData) {
-      return Left(new Error("resolve failed, no contract_call in fetched tx"))
+      return Left(
+        new DIDResolutionError(
+          DIDResolutionErrorCodes.InvalidAnchorTx,
+          "Name anchor transaction must encode contract call"
+        )
+      )
     }
 
     if (
       !BNS_ADDRESSES[did.metadata.deployment] === contractCallData.contract_id
     ) {
-      // TODO Update error message
       return Left(
-        new Error(
-          "Must reference TX to the BNS contract address, mainnet or testnet"
+        new DIDResolutionError(
+          DIDResolutionErrorCodes.InvalidAnchorTx,
+          "Name anchor transaction must be destined to the BNS contract"
         )
       )
     }
@@ -48,10 +59,9 @@ export const parseAndValidateTransaction =
 
     if (!validDidInceptionEvents[did.metadata.type].includes(calledFunction)) {
       return Left(
-        new Error(
-          `TX ID references ${calledFunction} function call. Allowed methods are ${validDidInceptionEvents[
-            did.metadata.type
-          ].toString()}`
+        new DIDResolutionError(
+          DIDResolutionErrorCodes.InvalidAnchorTx,
+          "Name anchor transaction references invalid function call"
         )
       )
     }
@@ -62,11 +72,12 @@ export const parseAndValidateTransaction =
 /**
  * Extracts the namespace, name, and zonefile-hash arguments from a name-register / name-update TX
  * @returns nameInfo - the name, namespace, and zonefile-hash encoded in the TX
+ * @todo Add specific error message for invalid anchor tx
  */
 
 const extractContractCallArgs = (
   functionArgs: Array<any>
-): Either<Error, { name: string; namespace: string; zonefileHash: string }> => {
+): Either<Error, TransactionArguments> => {
   const relevantArguments = ["name", "namespace", "zonefile-hash"]
 
   const {
@@ -82,12 +93,9 @@ const extractContractCallArgs = (
 
   if (!name || !namespace || !zonefileHash) {
     return Left(
-      new Error(
-        `Not all arguments present, got ${JSON.stringify({
-          name,
-          namespace,
-          zonefileHash,
-        })}`
+      new DIDResolutionError(
+        DIDResolutionErrorCodes.InvalidAnchorTx,
+        "Name anchor transaction does not include expected arguments"
       )
     )
   }
@@ -96,12 +104,14 @@ const extractContractCallArgs = (
     compose(cvToValue, hexToCV, stripHexPrefixIfPresent)
   )
 
+  const [nameArg, namespaceArg, zonefileHashArg] = hexEncodedValues
+
   return Right({
-    name: hexToAscii(hexEncodedValues[0]),
-    namespace: hexToAscii(hexEncodedValues[1]),
+    name: hexToAscii(nameArg),
+    namespace: hexToAscii(namespaceArg),
     zonefileHash:
-      typeof hexEncodedValues[2] === "string"
-        ? stripHexPrefixIfPresent(hexEncodedValues[2])
-        : stripHexPrefixIfPresent(hexEncodedValues[2].value),
+      typeof zonefileHashArg === "string"
+        ? stripHexPrefixIfPresent(zonefileHashArg)
+        : stripHexPrefixIfPresent(zonefileHashArg.value), // TODO Is this still the case?
   })
 }

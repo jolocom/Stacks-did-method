@@ -11,13 +11,14 @@ import {
   rekeySubdomain,
   revokeSubdomain,
 } from "../../src/registrar/subdomains"
-import { decodeFQN, encodeFQN } from "../../src/utils/general"
+import { decodeFQN, eitherToFuture, encodeFQN } from "../../src/utils/general"
 import { fetchNameInfo } from "../../src/api"
-import { map, promise } from "fluture"
-import { encodeStacksV2Did } from "../../src/utils/did"
+import { chain, map, promise } from "fluture"
+import { encodeStacksV2Did } from "../../src/utils/did/did"
 import { testNames, testNamespace, testSubdomains } from "./data"
 import { writeFileSync } from "fs"
 import { wait } from "../../src/registrar/utils"
+import { identity } from "ramda"
 var path = require("path")
 
 const network = new StacksMocknet()
@@ -45,7 +46,7 @@ export const setupNames = async () => {
         data.keypair
       )
         .then((did) => ({
-          [data.name]: did,
+          [data.name]: did.cata((e) => e.message, identity),
         }))
         .then()
     )
@@ -102,7 +103,10 @@ export const setupSubdomains = async () => {
             },
             network
           ).then((did) => {
-            return { ...v, ...{ [data.name]: did } }
+            return {
+              ...v,
+              ...{ [data.name]: did.cata((e) => e.message, identity) },
+            }
           })
         )
       ),
@@ -160,11 +164,13 @@ export const setup = async () => {
 }
 
 export const getDIDFromName = (fqn: string, network: StacksNetwork) => {
-  return fetchNameInfo(network)(decodeFQN(fqn)).pipe(
-    map(({ address, last_txid }) =>
-      encodeStacksV2Did({ address, anchorTxId: last_txid })
+  return eitherToFuture(decodeFQN(fqn))
+    .pipe(chain(fetchNameInfo(network)))
+    .pipe(
+      map(({ address, last_txid }) =>
+        encodeStacksV2Did({ address, anchorTxId: last_txid })
+      )
     )
-  )
 }
 
 setup()

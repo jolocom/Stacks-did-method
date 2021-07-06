@@ -1,5 +1,5 @@
-import { encodeStacksV2Did } from "./did"
-import { decodeFQN } from "./general"
+import { encodeStacksV2Did } from "./did/did"
+import { decodeFQN, eitherToFuture } from "./general"
 import { fetchAllNames, fetchNameInfo, fetchZoneFileForName } from "../api"
 import { None, Some } from "monet"
 import { map, chain, mapRej, resolve } from "fluture"
@@ -12,33 +12,36 @@ export const findValidNames =
     return fetchAllNames(network.coreApiUrl)(page).pipe(
       map(
         rMap((fqn: string) => {
-          const { name, namespace } = decodeFQN(fqn)
-          return fetchNameInfo(network)({ name, namespace }).pipe(
-            chain((info) => {
-              if (onlyMigrated && info["last_txid"] !== "0x") {
-                return resolve(None())
-              }
+          eitherToFuture(decodeFQN(fqn)).pipe(
+            chain(({ name, namespace }) =>
+              fetchNameInfo(network)({ name, namespace }).pipe(
+                chain((info) => {
+                  if (onlyMigrated && info["last_txid"] !== "0x") {
+                    return resolve(None())
+                  }
 
-              return fetchZoneFileForName(network.coreApiUrl)({
-                name,
-                namespace,
-              })
-                .pipe(mapRej(() => None()))
-                .pipe(
-                  map((res) =>
-                    res
-                      ? Some({
-                          did: encodeStacksV2Did({
-                            address: info.address,
-                            anchorTxId: info["last_txid"],
-                          }),
-                          zonefile: res,
-                        })
-                      : None()
-                  )
-                )
-                .pipe(map((v) => debug("new entry")(v.orNull())))
-            })
+                  return fetchZoneFileForName(network.coreApiUrl)({
+                    name,
+                    namespace,
+                  })
+                    .pipe(mapRej(() => None()))
+                    .pipe(
+                      map((res) =>
+                        res
+                          ? Some({
+                              did: encodeStacksV2Did({
+                                address: info.address,
+                                anchorTxId: info["last_txid"],
+                              }),
+                              zonefile: res,
+                            })
+                          : None()
+                      )
+                    )
+                    .pipe(map((v) => debug("new entry")(v.orNull())))
+                })
+              )
+            )
           )
         })
       )

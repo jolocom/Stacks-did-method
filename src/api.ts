@@ -53,18 +53,18 @@ export const fetchZoneFileForName =  (apiEndpoint: string) => (args: {
  *
  * @returns {FutureInstance<Error, String[]>} - an array of names owned by the address.
  */
-
-export const fetchNamesOwnedByAddress = (apiEndpoint: string) => (
+export const fetchNameOwnedByAddress = (apiEndpoint: string) => (
   address: string,
-): FutureInstance<Error, string[]> =>
+): FutureInstance<Error, string> =>
   fetchJSON<{ names: string[] }>(
     `${apiEndpoint}/v1/addresses/stacks/${address}`
   )
     .pipe(map(prop("names")))
     .pipe(
       chain((names) =>
-        names?.length > 0
-          ? resolve(names)
+        // One principal can only map to one on-chain name, therefore we don't expect to receive multiple results here
+        names?.length === 1
+          ? resolve(names[0])
           : reject(new Error("No names associated with DID"))
       )
     )
