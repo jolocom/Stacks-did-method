@@ -35,7 +35,7 @@ will continue to resolve to DID documents even if the system migrates to a new b
 
 Understanding how Blockstack DIDs operate requires understanding how Blockstack names operate. Fundamentally, a Blockstack DID is defined as a pointer to a *BNS name registered by an address*. The lifecycle of a Blockstack DID is therefore tied to the lifecycle of it's underlying BNS name.
 
-The Blockstack naming system differentiates between two types of names (and by extension, two types of resulting DIDs), *on-chain* and *off-chain* (elaborated on in the following subsections). Both on-chain and off-chain names (as well as the resulting DIDs) can be resolved to a set of singing keys, as well as additional metadata, using the BNS smart contract, and the Gaya storage network, as outlined in section 3. 
+The Blockstack naming system differentiates between two types of names (and by extension, two types of resulting DIDs), *on-chain* and *off-chain* (elaborated on in the following subsections). Both on-chain and off-chain names (as well as the resulting DIDs) can be resolved to a set of singing keys, as well as additional metadata, using the BNS smart contract, and the Gaia storage network, as outlined in section 3. 
 
 ## 1.2 On-chain DIDs
 
@@ -64,14 +64,15 @@ Unlike on-chain names, subdomains can be created and managed cheaply, because th
 An off-chain DID is similarly structured to an on-chain DID. Like on-chain names, each off-chain name is owned by an address, and is associated with a corresponding DNS zone file. A resolvable Stacks V2 DID can be derived for any existing off-chain name by concatenating two pieces of
 information:
 
-- The address of the subdomain owner, e.g. `SPZGZNSV03KYBNYYQJ62Z0EFRM3H6CWCEZKBN1H3`
+- The address of the subdomain owner, e.g. `SJB53GD600EMEM74DFMA0B61JN8D8C4VE4M8NJRP`
 - The identifier of the Stacks transaction (created by the on-chain name owner)
 which anchored the relevant batch of updates on the Stacks blockchain, e.g. `ca2c2398b017d6d4c0e3e58b3807a648ebd5e15e1e1ce98649bab7bda044cf37`
 
+Please note that the Stacks address of the subdomain owner is encoded using a different version byte (and subsequently starts with a different prefix) compared to an on-chain address (further elaborated on in sections 2.1 and 2.2).
+
 The resulting did -
-`did:stack:v2:SPZGZNSV03KYBNYYQJ62Z0EFRM3H6CWCEZKBN1H3-ca2c2398b017d6d4c0e3e58b3807a648ebd5e15e1e1ce98649bab7bda044cf37`
-contains enough information to map it to one corresponding BNS off-chain name 
-with the address during the resolution process (as described in section 3.3). The BNS contract, in combination with the Gaya storage network, can be used to retrieve and verify the public keys associated with the off-chain name (and by extension the DID) during the resolution process (as outlined in section 3.2).
+`did:stack:v2:SJB53GD600EMEM74DFMA0B61JN8D8C4VE4M8NJRP-ca2c2398b017d6d4c0e3e58b3807a648ebd5e15e1e1ce98649bab7bda044cf37`
+contains enough information to map it to one corresponding off-chain BNS name during the resolution process (as described in section 3.3). The BNS contract, in combination with the Gaia storage network, can be used to retrieve and verify the public keys associated with the off-chain name (and by extension the DID) during the resolution process (as outlined in section 3.2).
 
 # 2. Blockstack DID Method
 
@@ -87,20 +88,32 @@ information: a Stacks address, and a Stacks transaction identifier.
 
 The **address** shall be a [c32check](https://github.com/blockstack/c32check#c32check) encoding of a version byte concatenated
 with the RIPEMD160 hash of a SHA256 hash of a DER-encoded secp256k1 public key.
-For example, in this Python 2 snippet:
+For example, in this Javascript snippet:
 
-```
-import hashlib
-import base58
+``` javascript
+const crypto = require('crypto')
+const RIPEMD160 = require('ripemd160')
+const c32check = require('c32check')
 
-pubkey = '042bc8aa4eb54d779c1fb8a2d5022aec8ed7fc2cc34d57356d9e1c417ce416773f45b0299ea7be347d14c69c403d9a03c8ec0ccf47533b4bee8cd002e5de81f945'
-sha256_pubkey = hashlib.sha256(pubkey.decode('hex')).hexdigest()
-# '18328b13b4df87cbcd190c083ef1d74487fc1383792f208f52c596b4588fb665'
-ripemd160_sha256_pubkey = hashlib.new('ripemd160', sha256_pubkey.decode('hex')).hexdigest()
-# '1651c1a6001d4750e46be8a02cc19550d4309b71'
-version_byte = '\\x00'
-address = base58.b58check_encode(version_byte + ripemd160_sha256_pubkey.decode('hex'))
-# '1331okvQ3Jr2efzaJE42Supevzfzg8ahYW'
+const pubkey = Buffer.from(
+  '042bc8aa4eb54d779c1fb8a2d5022aec8ed7fc2cc34d57356d9e1c417ce416773f45b0299ea7be347d14c69c403d9a03c8ec0ccf47533b4bee8cd002e5de81f945',
+  'hex'
+)
+
+const sha256Pubkey = crypto.createHash('sha256')
+  .update(pubkey)
+  .digest('hex');
+// '18328b13b4df87cbcd190c083ef1d74487fc1383792f208f52c596b4588fb665'
+
+const ripemd160Sha256Pubkey = new RIPEMD160()
+  .update(Buffer.from(sha256Pubkey, 'hex'))
+  .digest('hex')
+// '1651c1a6001d4750e46be8a02cc19550d4309b71'
+
+const versionByte = 22
+const address = c32check.c32address(versionByte, ripemd160Sha256Pubkey)
+// SPB53GD600EMEM74DFMA0B61JN8D8C4VE7D2ZSJ9
+
 
 ```
 
@@ -113,18 +126,19 @@ on-chain name transaction or an off-chain name transaction, and whether or not
 it corresponds to a mainnet or testnet address.  The version bytes for each
 configuration shall be as follows:
 
-- On-chain names on mainnet: `0x00`
-- On-chain names on testnet: `0x6f`
-- Off-chain names on mainnet: `0x3f`
-- Off-chain names on testnet: `0x7f`
+- On-chain names on mainnet: `0x16` (decimal value 22)
+- On-chain names on testnet: `0x1a` (decimal value 26)
+- Off-chain names on mainnet: `0x11` (decimal value 17)
+- Off-chain names on testnet: `0x12` (decimal value 18)
 
-For example, the RIPEMD160 hash `1651c1a6001d4750e46be8a02cc19550d4309b71` would
-encode to the following base58check strings:
+For example, the RIPEMD160 hash `1651c1a6001d4750e46be8a02cc19550d4309b71` derived in the previous snippet would encode to the following c32Check strings depending on the address type:
 
-- On-chain mainnet: `1331okvQ3Jr2efzaJE42Supevzfzg8ahYW`
-- On-chain testnet: `mhYy6p1NrLHHRnUC1o2QGq2ynzGhduVoEX`
-- Off-chain mainnet: `SPL1qbhYmg3EAyn2qf36zoyDamuRXm2Gjk`
-- Off-chain testnet: `t8xcrYmzDDhJWihaQWMW2qPZs4Po1PfvCB`
+- On-chain mainnet: `SPB53GD600EMEM74DFMA0B61JN8D8C4VE7D2ZSJ9`
+- On-chain testnet: `STB53GD600EMEM74DFMA0B61JN8D8C4VE5477MXR`
+- Off-chain mainnet: `SHB53GD600EMEM74DFMA0B61JN8D8C4VE6DHF2QF`
+- Off-chain testnet: `SJB53GD600EMEM74DFMA0B61JN8D8C4VE4M8NJRP`
+
+The version bytes for the various address types can be [found here](https://github.com/jolocom/stacks-did-resolver/blob/main/src/constants.ts#L33).
 
 # 3. Blockstack DID Operations
 
@@ -210,7 +224,7 @@ Blockstack provides a reference implementation of a [subdomain registrar](https:
 ## 3.2 Resolving a Blockstack DID
 
 Resolving Stacks DIDs happens with the aid of the aforementioned BNS smart
-contract and the Gaya storage network. The resolution process can be generalized to the following main steps:
+contract and the Gaia storage network. The resolution process can be generalized to the following main steps:
 
 1. First, the data encoded in the Stacks v2 DID NSI is used to map it to it's corresponding
 underlying BNS name. As mentioned in the previous sections, a Stacks v2 DID
@@ -226,7 +240,7 @@ The individual steps are described in more detail in the following subsections.
 
 ### 3.2.1 Mapping a DID to a BNS name
 
-First, the DID's NSI (defined in section 2.1) is parsed, and the encoded Stacks address, and Stacks transaction identifier are extracted. The Stacks transaction identifier is used to query a Stacks blockchain client for the transaction data (e.g. by using the corresponding [HTTP API endpoint](https://stacks-node-api.mainnet.stacks.co/extended/v1/tx/0xdb05bd4e09fb29b6c91087aa9af0edeeb9f9f588a74ac64529bee9659c41871b)).
+First, the DID's NSI (defined in section 2.1) is parsed, and the encoded Stacks address, and Stacks transaction identifier are extracted. The Stacks transaction identifier is used to query a Stacks blockchain client for the full transaction data (e.g. by using the corresponding [HTTP API endpoint](https://stacks-node-api.mainnet.stacks.co/extended/v1/tx/0xdb05bd4e09fb29b6c91087aa9af0edeeb9f9f588a74ac64529bee9659c41871b)).
 
 The retrieved transaction object is expected include a contract call to one of the following BNS smart contract functions:
 
@@ -243,22 +257,21 @@ function call arguments:
 - `namespace` - the namespace to which the name belongs (e.g. "id").
 - `zonefile-hash` - the hash of the DNS zone file associated with the name.
 
-The Gaya storage network can be used to retrieve the zone
+The Gaia storage network can be used to retrieve the zone
 file using the `zonefile-hash` extracted from the transaction. The retrieved `zonefile` is
 expected to contain a `$ORIGIN` directive, matching the `name` and `namespace`
 values extracted from the transaction object.
 
 The zone file may also include one or more `TXT` resource records which encode further zone
 files associated with subdomains registered under this BNS `name`. Each `TXT` resource
-record is expected to include the zone file for the subdomain, as well as the
+record is expected to encode a zone file for the subdomain, as well as the
 address of the subdomain owner (as documented [here](https://docs.stacks.co/build-apps/references/bns#subdomains)).
 
-In case any of the listed owners matches the `address` encoded in the DID's NSI,
-the associated zone file is decoded and parsed. If the zone file is valid, the
-DID is mapped to the `subdomain` (retrieved from the zone file), `name` and
-`namespace` (extracted from the registration transaction). In case no `TXT` resource records are present, or none of the listed subdomains list the `address` encoded in the NSI as an owner, the DID is mapped to the `name` and `namespace` extracted from the referenced transaction object.
+As described in section 2.2, a Stacks v2 DID encodes a Stacks address, which subsequently includes a version byte denoting whether the DID is associated with an on-chain or off-chain BNS name. If the DID is associated with an on-chain name, the DID is mapped to the `name` and `namespace` encoded in the transaction object (as well as the `$ORIGIN` directive), and the `TXT` records (if present) are ignored.
 
-Before the mapped BNS name can be returned, the signed JSON Web Token referenced in the relevant zone file is retrieved, and the included public key is used to verify the associated signature. If the signature verifies correctly, and the included public key hashes to the `address` encoded in the DID's NSI, this step completes successfully, and the corresponding BNS name is returned, otherwise resolution fails with an error.
+If the DID is associated with an off-chain name, the corresponding zone file is expected to be encoded in one the included `TXT` resource records. The relevant entry is expected to list the `address` (extracted from the DID NSI) as the *owner*. In case the entry is found, the DID is mapped to the `subdomain` (retrieved from the zone file), `name` and `namespace` (extracted from the registration transaction), otherwise resolution fails with the appropriate error.
+
+Before the mapped BNS name can be returned, the signed JSON Web Token referenced in the relevant zone file needs to be retrieved, and the included public key used to verify the associated signature. If the signature verifies correctly, and the included public key hashes to the `address` encoded in the DID's NSI, this step completes successfully, and the corresponding BNS name is returned, otherwise resolution fails with an error.
 
 ### 3.2.2 Ensuring the DID is not deactivated
 
@@ -389,8 +402,8 @@ To revoke an on-chain name, the current owner can construct and broadcast a [`na
 
 In order to deactivate an off-chain name, the user can construct and broadcasts
 a TXT record for the DID's underlying name that (1) changes the owner address
-to a "nothing-up-my-sleeve" address (such as `1111111111111111111114oLvT2` --
-the base58-check encoding of 20 bytes of 0's), and (2) changes the zone file to
+to a "nothing-up-my-sleeve" address (specifically `1111111111111111111114oLvT2` --
+the base58-check encoding of 20 bytes of 0's, as [denoted here](https://github.com/jolocom/stacks-did-resolver/blob/main/src/constants.ts#L11)), and (2) changes the zone file to
 include an unresolvable URL.  This prevents the DID from resolving, and prevents
 it from being updated in the future.
 
