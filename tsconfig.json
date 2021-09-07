@@ -1,5 +1,9 @@
 {
   "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "tsBuildInfoFile": "./tsconfig.build.tsbuildinfo",
+    "composite": true,
     "module": "commonjs",
     "target": "es2017",
     "lib": ["es2017", "dom"],
@@ -10,11 +14,9 @@
     "sourceMap": true,
     "skipLibCheck": true,
     "noEmit": false,
-    "outDir": "js",
     "declaration": true
   },
   "include": [
-    "tests",
     "src"
   ],
   "exclude": [

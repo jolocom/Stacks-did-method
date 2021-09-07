@@ -1,64 +1,21 @@
-import { getTokenFileUrl } from "@stacks/profile"
-import { fetchAndVerifySignedToken } from "./signedToken"
-import { decodeFQN, eitherToFuture, normalizeAddress } from "./general"
-import "isomorphic-fetch"
-import { Right, Left, Either } from "monet"
-import { chain } from "fluture"
-import { DIDResolutionError, DIDResolutionErrorCodes } from "../errors"
-const { parseZoneFile } = require("zone-file")
+import { getTokenFileUrl } from '@stacks/profile'
+import { eitherToFuture, fetchAndVerifySignedToken } from './'
+import 'isomorphic-fetch'
+import { Right, Left, Either } from 'monet'
+import { chain, map } from 'fluture'
+import { DIDResolutionError, DIDResolutionErrorCodes } from '../errors'
+import { b58ToC32, c32ToB58 } from 'c32check'
+const { parseZoneFile } = require('zone-file')
 
-export const ensureZonefileMatchesName = ({
-  zonefile,
-  name,
-  namespace,
-  subdomain,
-}: {
-  zonefile: string
-  name: string
-  namespace: string
-  subdomain?: string
-}): Either<Error, string> => {
-  const parsedZoneFile = parseZoneFile(zonefile)
-
-  return decodeFQN(parsedZoneFile["$origin"]).flatMap((origin) => {
-    if (
-      origin.name !== name ||
-      origin.namespace !== namespace ||
-      origin.subdomain !== subdomain
-    ) {
-      return Left(
-        new DIDResolutionError(
-          DIDResolutionErrorCodes.InvalidZonefile,
-          "Zone file $ORIGIN does not match expected BNS name"
-        )
-      )
-    }
-
-    return Right(zonefile)
-  })
-}
-
-export const parseZoneFileTXT = (entries: string[]) =>
-  entries.reduce(
-    (parsed, current) => {
-      const [prop, value] = current.split("=")
-
-      if (prop.startsWith("zf")) {
-        return { ...parsed, zonefile: `${parsed.zonefile}${value}` }
-      }
-
-      return { ...parsed, [prop]: value }
-    },
-    { zonefile: "", owner: "", seqn: "0" }
-  )
+/**
+ * Will parse the TXT resource records included in a zone file and attempt to find the
+ * nested zone file for the specified subdomain
+ */
 
 export const findSubdomainZoneFileByName = (
   nameZonefile: string,
   subdomain: string
-): Either<
-  Error,
-  { zonefile: string; subdomain: string | undefined; owner: string }
-> => {
+): Either<Error, { zonefile: string; owner: string }> => {
   const parsedZoneFile = parseZoneFile(nameZonefile)
 
   if (parsedZoneFile.txt) {
@@ -69,9 +26,8 @@ export const findSubdomainZoneFileByName = (
     if (match) {
       const { owner, zonefile } = parseZoneFileTXT(match.txt)
       return Right({
-        subdomain: match.name,
-        owner,
-        zonefile: Buffer.from(zonefile, "base64").toString("ascii"),
+        owner: b58ToC32(owner),
+        zonefile: Buffer.from(zonefile, 'base64').toString('ascii'),
       })
     }
   }
@@ -79,35 +35,43 @@ export const findSubdomainZoneFileByName = (
   return Left(
     new DIDResolutionError(
       DIDResolutionErrorCodes.MissingZoneFile,
-      "No zone file found for subdomain"
+      'No zone file found for subdomain'
     )
   )
 }
 
-export const findSubdomainZonefileByOwner = (
+/**
+ * Will parse the TXT resource records included in a zone file and attempt to find the
+ * nested zone file for the specified owner
+ */
+
+export const findSubdomainZoneFileByOwner = (
   nameZonefile: string,
   owner: string
 ): Either<
   Error,
   {
     zonefile: string
-    subdomain: string
+    fqn: string
   }
 > => {
-  const parsedZoneFile = parseZoneFile(nameZonefile)
+  const parsedZf = parseZoneFile(nameZonefile)
 
-  if (parsedZoneFile.txt) {
-    const match = parsedZoneFile.txt.find((arg: { txt: string[] }) => {
-      return parseZoneFileTXT(arg.txt).owner === normalizeAddress(owner)
+  if (parsedZf.txt) {
+    const match = parsedZf.txt.find((arg: { txt: string[] }) => {
+      // Please note, 0 is the bitcoin version, equivalent to the 22 (base10) Stacks version byte
+      return parseZoneFileTXT(arg.txt).owner === c32ToB58(owner, 0)
     })
 
     if (match) {
+      const subdomainZoneFile = Buffer.from(
+        parseZoneFileTXT(match.txt).zonefile,
+        'base64'
+      ).toString('ascii')
+
       return Right({
-        subdomain: match.name,
-        zonefile: Buffer.from(
-          parseZoneFileTXT(match.txt).zonefile,
-          "base64"
-        ).toString("ascii"),
+        fqn: parseZoneFile(subdomainZoneFile).$origin,
+        zonefile: subdomainZoneFile,
       })
     }
   }
@@ -115,44 +79,53 @@ export const findSubdomainZonefileByOwner = (
   return Left(
     new DIDResolutionError(
       DIDResolutionErrorCodes.MissingZoneFile,
-      "No zone file found for subdomain"
+      'No zone file found for subdomain'
     )
   )
 }
 
-export const parseZoneFileAndExtractNameinfo = (zonefile: string) => {
-  const parsedZf = parseZoneFile(zonefile)
+export const parseZoneFileTXT = (entries: string[]) =>
+  entries.reduce(
+    (parsed, current) => {
+      const [prop, value] = current.split('=')
 
-  return decodeFQN(parsedZf["$origin"]).flatMap(
-    ({ name, namespace, subdomain }) =>
-      extractTokenFileUrl(zonefile).map((url) => ({
-        name,
-        namespace,
-        subdomain,
-        tokenUrl: url,
-      }))
+      if (prop.startsWith('zf')) {
+        return { ...parsed, zonefile: `${parsed.zonefile}${value}` }
+      }
+
+      return { ...parsed, [prop]: value }
+    },
+    { zonefile: '', owner: '', seqn: '0' }
   )
-}
+
+/**
+ * Given a zone file for a BNS name, and the c32 encoded Stacks address expected name owner, this function will
+ * extract the profile token URL, fetch the referenced profile token JWS, verify the associated signature,
+ * and return the public key as well as the profile token URL in case signature verifiction succeeds
+ */
 
 export const getPublicKeyUsingZoneFile = (zf: string, ownerAddress: string) =>
-  eitherToFuture(parseZoneFileAndExtractNameinfo(zf)).pipe(
-    chain(({ tokenUrl }) =>
-      fetchAndVerifySignedToken(tokenUrl, normalizeAddress(ownerAddress))
+  eitherToFuture(extractTokenFileUrl(zf)).pipe(
+    chain(tokenUrl =>
+      fetchAndVerifySignedToken(tokenUrl, ownerAddress).pipe(
+        map(publicKey => ({ publicKey, tokenUrl }))
+      )
     )
   )
 
 const extractTokenFileUrl = (zoneFile: string): Either<Error, string> => {
   try {
     const url = getTokenFileUrl(parseZoneFile(zoneFile))
+
     return url
       ? Right(url)
       : Left(
           new DIDResolutionError(
             DIDResolutionErrorCodes.InvalidZonefile,
-            "Missing URI resource record in zone file"
+            'Missing URI resource record in zone file'
           )
         )
-  } catch (e) {
-    return Left(e)
+  } catch (e: any) {
+    return Left(e as Error)
   }
 }
