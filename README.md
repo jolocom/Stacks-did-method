@@ -42,9 +42,9 @@ First clone the `stacks.js` repository locally, install all all dependencies, an
 
 ```bash
 
-git clone https://github.com/blockstack/stacks.js.git
+git clone https://github.com/jolocom/Stacks-did-method.git
 
-cd stacks.js
+cd Stacks-did-method
 
 npm install
 

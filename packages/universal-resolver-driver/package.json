@@ -22,5 +22,6 @@
     "did-resolver": "^1.1.0"
   },
   "devDependencies": {
+    "typescript": "^4.4.2"
   }
 }
