@@ -20,7 +20,7 @@ import {
 export const mapDidToName = (did: StacksDID, network: StacksNetwork) =>
   getNameRecordForDID(did, network).pipe(
     chain(({ zonefile, fqn }) =>
-      getPublicKeyUsingZoneFile(zonefile, did.address).pipe(map(_ => fqn))
+      getPublicKeyUsingZoneFile(zonefile, did).pipe(map(_ => fqn))
     )
   )
 

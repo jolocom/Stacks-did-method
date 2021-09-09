@@ -5,6 +5,7 @@ import { Right, Left, Either } from 'monet'
 import { chain, map } from 'fluture'
 import { DIDResolutionError, DIDResolutionErrorCodes } from '../errors'
 import { b58ToC32, c32ToB58 } from 'c32check'
+import { StacksDID } from '../types'
 const { parseZoneFile } = require('zone-file')
 
 /**
@@ -104,10 +105,10 @@ export const parseZoneFileTXT = (entries: string[]) =>
  * and return the public key as well as the profile token URL in case signature verifiction succeeds
  */
 
-export const getPublicKeyUsingZoneFile = (zf: string, ownerAddress: string) =>
+export const getPublicKeyUsingZoneFile = (zf: string, owner: StacksDID) =>
   eitherToFuture(extractTokenFileUrl(zf)).pipe(
     chain(tokenUrl =>
-      fetchAndVerifySignedToken(tokenUrl, ownerAddress).pipe(
+      fetchAndVerifySignedToken(tokenUrl, owner).pipe(
         map(publicKey => ({ publicKey, tokenUrl }))
       )
     )
@@ -125,7 +126,7 @@ const extractTokenFileUrl = (zoneFile: string): Either<Error, string> => {
             'Missing URI resource record in zone file'
           )
         )
-  } catch (e: any) {
+  } catch (e) {
     return Left(e as Error)
   }
 }

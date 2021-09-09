@@ -1,5 +1,5 @@
 import { Right, Left, Either } from 'monet'
-import { verifyProfileToken } from '@stacks/profile/dist'
+import { verifyProfileToken, extractProfile, wrapProfileToken } from '@stacks/profile/dist'
 import { eitherToFuture } from './'
 import { chain, map } from 'fluture'
 import { DIDResolutionError, DIDResolutionErrorCodes } from '../errors'
@@ -8,15 +8,16 @@ import { c32addressDecode, c32address } from 'c32check/lib/address'
 import { versionByteToDidType } from '../constants'
 import { DIDParseError, DIDParseErrorCodes } from '../errors'
 import { fetchJSON } from '../api'
+import { DIDType, StacksDID } from '../types'
 
 /**
  * Given a token URL (i.e. the URI record listed in a zone file), and the owner of the name described
  * by the zone file, will fetch the associated profile token JWS, verify it and return the associated public key
  */
 
-export const fetchAndVerifySignedToken = (tokenUrl: string, ownerAddress: string) =>
+export const fetchAndVerifySignedToken = (tokenUrl: string, owner: StacksDID) =>
   fetchSignedToken(tokenUrl)
-    .pipe(map(verifyTokenAndGetPubKey(ownerAddress)))
+    .pipe(map(verifyTokenAndGetPubKey(owner)))
     .pipe(chain(eitherToFuture))
 
 /**
@@ -54,15 +55,22 @@ export const toMainnetAddress = (address: string) => {
 const fetchSignedToken = (endpoint: string) => fetchJSON<any[]>(endpoint).pipe(map(el => el[0]))
 
 const verifyTokenAndGetPubKey =
-  (owner: string) =>
+  (did: StacksDID) =>
   ({ token }: { token: string }): Either<Error, string> => {
     try {
-      const { payload } = verifyProfileToken(token, toMainnetAddress(owner))
-      //@ts-ignore
+      const { decodedToken: { payload }}: Record<string, any> = wrapProfileToken(token)
+
+      if (did.metadata.type === DIDType.onChain) {
+        verifyProfileToken(token, payload.subject.publicKey)
+      } else {
+        verifyProfileToken(token, toMainnetAddress(did.address))
+      }
+
       return Right(payload.subject.publicKey)
-    } catch (e: any) {
+    } catch (e) {
       return Left(
-        new DIDResolutionError(DIDResolutionErrorCodes.InvalidSignedProfileToken, e.message)
+        new DIDResolutionError(DIDResolutionErrorCodes.InvalidSignedProfileToken, (e as Error).message)
       )
     }
+
   }

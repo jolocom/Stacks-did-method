@@ -71,7 +71,7 @@ const getPublicKeyForName = (did: StacksDID, decodedFqn: FQN, nameRecord: NameIn
           Error,
           { zonefile: string; owner: string }
         >)
-  ).pipe(chain(v => getPublicKeyUsingZoneFile(v.zonefile, v.owner)))
+  ).pipe(chain(({zonefile}) => getPublicKeyUsingZoneFile(zonefile, did)))
 
 /**
  * Returns a function resolving a Stacks DID to the corresponding DID document,

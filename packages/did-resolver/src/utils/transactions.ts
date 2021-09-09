@@ -31,6 +31,17 @@ export const parseAndValidateTransaction =
       [DIDType.onChain]: ['name-register', 'name-import'],
     }
 
+    if (did.metadata.type === DIDType.onChain) {
+      if (tx.sender_address !== did.address) {
+        return Left(
+          new DIDResolutionError(
+            DIDResolutionErrorCodes.InvalidAnchorTx,
+            `Expected anchor tx to be sent by ${did.address}, actual sender is: ${tx.sender_address}`
+          )
+        )
+      }
+    }
+
     if (tx.tx_status !== 'success') {
       return Left(
         new DIDResolutionError(
