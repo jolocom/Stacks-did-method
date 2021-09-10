@@ -5,7 +5,7 @@ This is a Universal Resolver driver for did:stack:v2 identifiers.
 ## Specifications
 
 - [Decentralized Identifiers](https://www.w3.org/TR/did-core/)
-- [DID Method Specification]('../did-resolver/docs/DID_Method_Spec.md')
+- [DID Method Specification]('../../docs/DID_Method_Spec.md')
 
 ## Example DIDs
 

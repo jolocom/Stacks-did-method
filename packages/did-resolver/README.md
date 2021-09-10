@@ -1,6 +1,6 @@
 # @stacks/did-resolver
 
-This repository includes the implementation for the Stack v2 DID resolver, as well as the corresponding `did:stack:v2` [DID method specification](./docs/DID_Method_Spec.md). As outlined in the specification, this module relies on an instance of the [BNS](https://docs.stacks.co/build-apps/references/bns) smart contract, as well as the Atlas peer network to perform DID resolution.
+This repository includes the implementation for the Stack v2 DID resolver, as well as the corresponding `did:stack:v2` [DID method specification](../../docs/DID_Method_Spec.md). As outlined in the specification, this module relies on an instance of the [BNS](https://docs.stacks.co/build-apps/references/bns) smart contract, as well as the Atlas peer network to perform DID resolution.
 
 ## Installation
 
